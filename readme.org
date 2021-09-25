@@ -6,30 +6,28 @@ interface.
 
 * Motivation
 The command line is a great tool, yet if I ever write more than 4 words on the
-command line I just go crazy. The command line is to me a tool for quick queries
+command line I go crazy. The command line is, for me, a tool for quick queries
 not a work environment.
 
 Interacting with the Cardano network happens through transactions. Creating a
 transaction with the CLI gets really cumbersome as the transaction grows in
 complexity and bash scripts just tame the problem for a while. Bash scripts
-automate repetitive tasks at the cost of flexibility and they still remain very
-limited. In bash scripts you are still bound by the one dimensionality of the
-command line. Despite editing those scripts on an editor you must mark line
-breaks, and keep track of quoting your variables and input.
+automate repetitive tasks at the cost of flexibility. Bash scripts are no
+solution, because you are still bound by the one dimensionality of the command
+line. Despite editing those scripts on an editor you must mark line breaks, and
+keep track of quoting your variables and input.
 
-I want a tool like that. A powerful tool to interact with the cardano-node,
-which has all the features, does not get cumbersome as you increase the
-complexity of your tasks, and empowers you as a user.
+I want a tool that lets me craft my transaction, a powerful tool to interact
+with the cardano-node, which has all the features, does not get cumbersome as
+you increase the complexity of your tasks, and empowers you as a user.
 
 I couldn't find such a tool, thus I started building it myself. A text editable
-interface as a wallet for Cardano to create my transactions. A tool that
-embraces the power of my text editor instead of the limitations of the command
-line.
+interface to create my transactions in Cardano. A tool that embraces the power
+of my text editor instead of the limitations of the command line.
 
 I release this prototype at the Cardano Summit 2021 on the Plutus Pioneer
-Challenge. In the hope to raise awareness to this tool and also to call
-attention to my Catalyst proposal to fund the further development of this
-tool.
+Capstone Challenge. In the hope to raise awareness of this tool and also to call
+attention to my Catalyst proposal to fund the further development of this tool.
 
 Please have a look at it:
 
@@ -40,14 +38,9 @@ This project is not on MELPA, you must install it yourself and deal with all
 dependencies as well.
 ** Dependencies
 *** Cardano Node
-You need a running Cardano node you can connect to. The easiest way to get one setup for the public testenet is using this repo: https://github.com/input-output-hk/testnet-summit-scripts
-*** Libyaml
-Install in your OS =libyaml= and the emacs bindings =emacs-libyaml=
-https://github.com/syohex/emacs-libyaml
-
-The Emacs binding aren't in MELPA either you must install them manually and have
-them on your =EMACSLOADPATH=
-
+You need a running Cardano node you can connect to. The easiest way to get one
+setup for the public testnet is using this repo:
+https://github.com/input-output-hk/testnet-summit-scripts
 *** Emacs 27
 This is the latest release and it is required for the native support for JSON parsing, make also sure it is compiled with =--with-modules=, you need that for the =emacs-libyaml= binding.
 
@@ -55,6 +48,13 @@ Additionally, these Emacs packages are required:
 - dash
 - yaml-mode
 - helm
+
+*** Libyaml
+Install in your OS =libyaml= and the Emacs bindings =emacs-libyaml=
+https://github.com/syohex/emacs-libyaml
+
+The Emacs binding aren't in MELPA either you must install them manually and have
+them on your =EMACSLOADPATH=
 
 *** This package itself
 Make sure this repo is also in your =EMACSLOADPATH=, then evaluate the file =cardano-tx.el=.
@@ -128,15 +128,17 @@ the CLI to instruct by commands the crafting of the transaction.
 
 To launch the editor call =M-x cardano-tx-new=. This opens a buffer with a
 transaction template you can directly edit. Let's create a simple spending
-transaction where we start with our funded UTxO and spend it to fund a plutus
+transaction where we start with our funded UTxO and spend it to fund a Plutus
 script.
 *** Spending and sending funds to Plutus script addresses
 Have a look at the next annotated example. It is a simple yaml file. You obey
 the YAML syntax, so that =libyaml= can parse this file. The structure reflects
-intuitively what the transaction itself is.
+intuitively what the transaction itself is about.
 
 You get the added benefits of syntax highlight from the editor as many other
 editing tools. On top of that this tool provides some auto-completion tools.
+You can also write comments in between the lines, because yaml allows that. That
+is not possible on a bash script that using commands with line breaks.
 #+begin_src yaml
 # This are the inputs for the transaction.
 inputs:
@@ -239,3 +241,13 @@ find it on the testnet explorer.
 That's it. This tools reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
 the input, signing and submitting.
+* Extra info
+The transaction preview function only works if you compile the cardano-cli-1.29
+with this extra patch.
+https://github.com/input-output-hk/cardano-node/pull/3082#issuecomment-899083656
+ Newer versions of the cli are incompatible with this patch, but don't represent
+all the data.
+
+The balances view shown on the demo video is not incorporated in this prototype
+and in general display of the token bundles does not work in this prototype as
+it needs already the cli to be in version 1.30.
