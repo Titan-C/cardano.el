@@ -80,7 +80,7 @@ If STAKE is non-nil generate stake key."
 Files are located in keyring dir together with matching address files."
   (interactive
    (thread-first
-       (read-string "How do you want to name your keys(sparate with space for many): ")
+       (read-string "How do you want to name your keys(separate with space for many): ")
      split-string))
   (let ((keys (mapcar #'file-name-base
                       (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
