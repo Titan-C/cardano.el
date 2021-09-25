@@ -1,11 +1,37 @@
-#+TITLE: An Emacs interface to cardano
+#+TITLE: An Emacs interface to Cardano
 
 This project is a running experiment and in Alpha stage. Don't rely on any of
 its functions or interfaces to be stable, because I'm still testing this user
 interface.
 
-Today, for the Cardano Summit 2021 and the Plutus Pioneer Capstone.
 * Motivation
+The command line is a great tool, yet if I ever write more than 4 words on the
+command line I just go crazy. The command line is to me a tool for quick queries
+not a work environment.
+
+Interacting with the Cardano network happens through transactions. Creating a
+transaction with the CLI gets really cumbersome as the transaction grows in
+complexity and bash scripts just tame the problem for a while. Bash scripts
+automate repetitive tasks at the cost of flexibility and they still remain very
+limited. In bash scripts you are still bound by the one dimensionality of the
+command line. Despite editing those scripts on an editor you must mark line
+breaks, and keep track of quoting your variables and input.
+
+I want a tool like that. A powerful tool to interact with the cardano-node,
+which has all the features, does not get cumbersome as you increase the
+complexity of your tasks, and empowers you as a user.
+
+I couldn't find such a tool, thus I started building it myself. A text editable
+interface as a wallet for Cardano to create my transactions. A tool that
+embraces the power of my text editor instead of the limitations of the command
+line.
+
+I release this prototype at the Cardano Summit 2021 on the Plutus Pioneer
+Challenge. In the hope to raise awareness to this tool and also to call
+attention to my Catalyst proposal to fund the further development of this
+tool.
+
+Please have a look at it:
 
 https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-48088
 
@@ -25,7 +51,7 @@ them on your =EMACSLOADPATH=
 *** Emacs 27
 This is the latest release and it is required for the native support for JSON parsing, make also sure it is compiled with =--with-modules=, you need that for the =emacs-libyaml= binding.
 
-Additionally, these packages are required:
+Additionally, these Emacs packages are required:
 - dash
 - yaml-mode
 - helm
@@ -75,7 +101,7 @@ M-x cardano-address-new-key-files RET first second third
 #+end_src
 will generated this folder structure
 
-#+RESULTS:
+#+begin_src bash
 ~/wallet/
 ├── first.addr
 ├── first.skey
@@ -89,6 +115,7 @@ will generated this folder structure
 ├── third.addr
 ├── third.skey
 └── third.vkey
+#+end_src
 
 Go ahead and fund any of these addresses
 ** Crafting a transaction
@@ -99,14 +126,17 @@ workflow to create a transaction.
 The goal is to directly create the transaction in your editor instead of using
 the CLI to instruct by commands the crafting of the transaction.
 
-To launch the editor call =M-x cardano-tx-new=. This opens a buffer with already
-a transaction template you can directly edit. Let's create a simple spending
-transaction where we start with our funded UTxO and spend it to fund some plutus
-scripts.
+To launch the editor call =M-x cardano-tx-new=. This opens a buffer with a
+transaction template you can directly edit. Let's create a simple spending
+transaction where we start with our funded UTxO and spend it to fund a plutus
+script.
 *** Spending and sending funds to Plutus script addresses
 Have a look at the next annotated example. It is a simple yaml file. You obey
 the YAML syntax, so that =libyaml= can parse this file. The structure reflects
 intuitively what the transaction itself is.
+
+You get the added benefits of syntax highlight from the editor as many other
+editing tools. On top of that this tool provides some auto-completion tools.
 #+begin_src yaml
 # This are the inputs for the transaction.
 inputs:
@@ -144,7 +174,7 @@ When creating this transaction there are utility functions that help you with so
 For example:
 - =cardano-tx-helm-insert-utxos= all utxos that are in your wallet for easy input.
 - =cardano-address-helm-inser= all your wallets, organized by name, but inputs the address
-- =cardano-address-from-script= inputs a plutus script and loads to the killring the script address
+- =cardano-address-from-script= inputs a plutus script and loads to the kill ring the script address
 
 To send the transaction just use shortcut =C-c C-c= or call =M-x cardano-tx-edit-finish=.
 
@@ -205,3 +235,7 @@ outputs:
 transaction.  In this case the transaction is
 [[https://explorer.cardano-testnet.iohkdev.io/en/transaction?id=d5d22312f6716bcea1aeac89ffc500cc1f0d5e2449904c1600efe0b2d3168fd2][d5d22312f6716bcea1aeac89ffc500cc1f0d5e2449904c1600efe0b2d3168fd2]] and you can
 find it on the testnet explorer.
+
+That's it. This tools reflects the transaction crafting with a User Interface,
+that is the transaction itself and takes care of all the details about parsing
+the input, signing and submitting.
