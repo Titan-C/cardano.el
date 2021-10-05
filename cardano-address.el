@@ -40,7 +40,7 @@
   :group 'cardano)
 
 (defcustom cardano-address-keyring-dir "~/cardano-wallet-keys"
-  "Folder where to store all the key files and addresses under managment."
+  "Folder where to store all the key files and addresses under management."
   :type 'directory)
 
 (defvar cardano-address--list nil
@@ -80,9 +80,8 @@ If STAKE is non-nil generate stake key."
   "Generate the key pairs for each one of NAMES.
 Files are located in keyring dir together with matching address files."
   (interactive
-   (thread-first
-       (read-string "How do you want to name your keys(separate with space for many): ")
-     split-string))
+   (split-string
+    (read-string "How do you want to name your keys(separate with space for many): ")))
   (let ((keys (mapcar #'file-name-base
                       (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
     (message
@@ -91,6 +90,7 @@ Files are located in keyring dir together with matching address files."
         (if (member name keys)
             (format "%s: key pair already exists." name)
           (cardano-address-new-key name)
+          (cardano-address-get-addresses name)
           (format "%s: New key pair created" name)))
       names "\n"))))
 
