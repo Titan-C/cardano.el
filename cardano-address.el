@@ -74,6 +74,7 @@ If STAKE is non-nil generate stake key."
     (cardano-cli
      type "key-gen"
      "--verification-key-file" v-file
+     "--signing-key-file" s-file)))
 
 (defun cardano-address-new-key-files (&rest names)
   "Generate the key pairs for each one of NAMES.
@@ -92,7 +93,6 @@ Files are located in keyring dir together with matching address files."
           (cardano-address-new-key name)
           (format "%s: New key pair created" name)))
       names "\n"))))
-   "--signing-key-file" s-file)))
 
 (defun cardano-address-payment (name &optional no-stake)
   "Create payment address under NAME.

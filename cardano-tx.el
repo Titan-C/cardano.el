@@ -65,13 +65,13 @@ FUNCTION is called with two arguments, KEY and VALUE."
      (lambda (key value)
        (push (funcall function key value) results))
      table)
+    results))
 
 (defun cardano-tx-nw-p (s)
   "Trimed not white-space string S."
   (when (stringp s)
     (let ((trimed (string-trim s)))
       (and (not (string-empty-p trimed)) trimed))))
-   results))
 
 (defun cardano-tx-pick (options-name candidates)
   "Simple multiple CANDIDATES picker of type OPTIONS-NAME."
