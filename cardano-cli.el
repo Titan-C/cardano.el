@@ -6,7 +6,7 @@
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
 ;; Version: 0.0.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "27.1") (yaml-mode "0.0.15") (yaml "0.1.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -32,14 +32,16 @@
 ;;; Code:
 
 (require 'seq)
-(require 'libyaml)
+(require 'yaml)
+(require 'yaml-mode)
+(require 'logger)
 
 (defgroup cardano-cli nil
   "Integration with cardano cli"
   :group 'cardano)
 
 (defcustom cardano-cli-command (executable-find "cardano-cli")
-  "Which cardano-cli binary to use."
+  "Which `cardano-cli' binary to use."
   :type 'file)
 
 (defcustom cardano-cli-node-socket "/tmp/cardano.socket"
@@ -52,42 +54,49 @@
 
 (defvar cardano-cli-skip-network-args
   (list "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
-        "version" "policyid")
-  "Commands that don't requiry adding the network args.")
-
+        "version" "policyid"
+        "registration-certificate")
+  "Commands that don't require adding the network arguments.")
 
 (defun cardano-cli (&rest args)
   "Call the cli interface connected to the node socket pass ARGS."
   (let ((process-environment (list (concat "CARDANO_NODE_SOCKET_PATH=" cardano-cli-node-socket)))
+        (logger-buffer-name "*cardano-log*")
         (cmd (if (seq-intersection cardano-cli-skip-network-args args)
                  args
                (append args cardano-cli-network-args))))
-    (message "Calling cardano-cli with args %S" cmd)
+    (logger 'debug "%s %s" cardano-cli-command (mapconcat #'prin1-to-string cmd " "))
     (with-temp-buffer
       (let ((result
-             (apply #'call-process cardano-cli-command nil (list (current-buffer) "/tmp/carerr") nil
+             (apply #'call-process cardano-cli-command nil (current-buffer) nil
                     cmd)))
-        (if (= result 1)
-            (with-current-buffer (find-file-noselect "/tmp/carerr")
-              (goto-char (point-min))
-              (when (re-search-forward "Usage:" nil 'end)
-                (backward-sentence))
-              (error (string-trim (buffer-substring-no-properties (point-min) (point)))))
-          (string-trim (buffer-string)))))))
+        (if (= result 0)
+            (string-trim (buffer-string))
+          (goto-char (point-min))
+          (when (re-search-forward "Usage:" nil 'end)
+            (backward-sentence))
+          (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
+            (logger 'error err-msg)
+            (error err-msg)))))))
 
 (defun cardano-cli-json->yaml (json-string)
   "Convert JSON-STRING to yaml."
-  (yaml-dump (json-parse-string json-string)))
+  (yaml-encode (json-parse-string json-string)))
 
 (defun cardano-cli-tip ()
-  "Display in minibuffer current chain tip."
+  "Display in mini-buffer current chain tip."
   (interactive)
-  (message (cardano-cli-json->yaml (cardano-cli "query" "tip"))))
+  (with-temp-buffer
+    (yaml-mode)
+    (insert
+     (cardano-cli-json->yaml (cardano-cli "query" "tip")))
+    (font-lock-ensure)
+    (message (buffer-string))))
 
 (defun cardano-cli-version ()
   "Print the current cli version."
   (interactive)
-  (cardano-cli "version"))
+  (message (cardano-cli "version")))
 
 (provide 'cardano-cli)
 ;;; cardano-cli.el ends here
