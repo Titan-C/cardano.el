@@ -310,7 +310,9 @@ outputs:
 Have a look at the transaction on an testnet explorer: [[https://testnet.adatools.io/transactions/9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b][9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b]]
 
 *** Claiming from a Plutus script address
-The plutus script in this example has this validator script
+The Plutus script in this example has this validator script, and corresponds to
+the script in the file =contracts/list-in-range.plutus=.
+
 #+begin_src haskell
 {-# INLINABLE rangeContract #-}
 rangeContract :: (Integer, Integer) -> [Integer] -> ScriptContext -> P.Bool
@@ -341,49 +343,40 @@ inputs:
   # This is the UTxO that created in the previous section
   # Because it is a Plutus script. To unclock it we need to provide extra
   # information like the plutus script, datum and redeemer
-  - utxo: e65d3130fac4b95e150a4978d881830a490ef2a90fd9e7e9bcd936a741edceb6#1
+  - utxo: 20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00#3
     # path to the script file
-    script-file: "~/dev/cardano/emacs-wallet/contracts/list-in-range.plutus"
+    script-file: "contracts/list-in-range.plutus"
     # path to the typed datum
-    datumfile: "~/dev/cardano/emacs-wallet/plutus-data/tuple_ints(-5,6)"
+    datumfile: "plutus-data/tuple_ints(-5,6)"
     # I can directy specify a json value. List are json values and thus
     # can be directly parsed. There is no need to write the typed version in a file.
     redeemer: [2, -5, -1, 4, 0, 3, 1, 6, -4]
 
-# We need to declare a collateral UTxO for nodes to actually accept validating our transaction.
-collateral: 010b59903cd3c254a7fbf16fbce49135c540e9857669904502dd69622bb29e5a#2
+collateral: 20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00#1
 
 outputs:
-  - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t # first
+  # ALWAYS think about your change address
+  - address:  addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
     change: true
 #+end_src
 
 =C-c C-c= or calling =M-x cardano-tx-edit-finish=, builds and submits the
 transaction.  In this case the transaction is
-[[https://explorer.cardano-testnet.iohkdev.io/en/transaction?id=d5d22312f6716bcea1aeac89ffc500cc1f0d5e2449904c1600efe0b2d3168fd2][d5d22312f6716bcea1aeac89ffc500cc1f0d5e2449904c1600efe0b2d3168fd2]] and you can
+[[https://testnet.adatools.io/transactions/0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8][0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8]] and you can
 find it on the testnet explorer.
 
 That's it. This tools reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
 the input, signing and submitting.
 * Extra info
-The transaction preview function only works if you compile the cardano-cli-1.29
-with this extra patch.
-https://github.com/input-output-hk/cardano-node/pull/3082#issuecomment-899083656
- Newer versions of the cli are incompatible with this patch, but don't represent
-all the data.
-
-The balances view shown on the demo video is not incorporated in this prototype
-and in general display of the token bundles does not work in this prototype as
-it needs already the cli to be in version 1.30.
-
-
-
-I release this prototype at the Cardano Summit 2021 on the Plutus Pioneer
-Capstone Challenge. In the hope to raise awareness of this tool and also to call
+This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
+Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
+some of the winners. I hope it raise awareness of this tool and also to call
 attention to my Catalyst proposal to fund the further development of this tool.
 
-Please have a look at it:
+Unfortunately, it did not receive enough community support for Fund 6. Yet, I'm
+releasing most of the work done in advance. I will re-apply on the next funding
+round.
 
 https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-48088
 
@@ -391,6 +384,6 @@ I recorded a demo video, now a bit outdated
 https://www.youtube.com/watch?v=ocSzYLmYPMQ, but you can get the idea of the
 workflow to create a transaction.
 
-Let's
-create a simple spending transaction where we start with our funded UTxO and
-spend it to fund a Plutus script.
+The transaction preview function only works if you compile the cardano-cli-1.29
+with this extra patch.
+https://github.com/input-output-hk/cardano-node/pull/3082#issuecomment-899083656
