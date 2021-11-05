@@ -202,6 +202,112 @@ clipboard for you to look for it in your favorite explorer.
 This transaction has the id [[
  https://testnet.adatools.io/transactions/20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00][20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00]], and is on the
 Testnet.
+*** Minting native tokens
+Minting tokens is again simple and doable with a single specification. Again,
+exemplifying with a rather large transaction, where I'll mint two kinds of
+token: a fungible token with unconstrained minting policy and a NFT policy.
+Additionally, the NFT metadata will include its metadata.
+
+Launch the editor with =M-x cardano-tx-new=, and pick some UTxOs to fund the
+mint transaction. It is a big transaction, don't get overwhelmed by the forest
+they are only trees. Follow the comments, a lot is going on in this transaction.
+
+#+begin_src yaml
+inputs:
+  - utxo: 4fae4f6e9c80d6c56476e083e9562a867ab7a6cd6be4e694d1f0b0e0b8d97eee#0
+
+# Minting policies are characterize by the policy-id, here you can name them,
+# and use that name throughout the transaction. The editor will then replace the
+# name for the policy-id when creating the transaction.
+
+mint:
+  # This first policy(reward-tokens) only requires one witness to mint. You can mint
+  # anytime you want as long as you have the key. I can use them as reward points.
+  # I can keep minting to reward users.
+  reward-tokens: # This is my first policy name
+    policy: # Declare the policy. A single signature is enough
+      type: sig
+      keyHash: df5f1b9d24f0d6424dfb49eabfa7f96f7d75ac68b262cc0b0d49186d # fourth
+    assets: # Here is the amount of assets to mint. I name each of the tokens
+      gold: 100
+      platinum: 50
+  # This second policy are two NFTs. It honors XKCD, and mints NFTs that link to
+  # a particular comic. The minting policy requires 2 witnesses and has a time lock
+  # to ensure that no more assets are minted under this policy after the slot passed
+  xkcd: # this is the policy name
+    policy:
+      type: all
+      scripts:
+        - type: sig
+          keyHash: a6eb2a117cc8c5a26a7895eb03f3c88d3d2391e34e988883327b9893 # second
+        - type: sig
+          keyHash: 9bcde05606b1fbd5f5390b3ebbba0f523bddba5822027c856ebc336a # third
+        - type: before
+          slot: 41770500 # this is the time lock
+    assets: # Minting two unique NFTs
+      networking: 1
+      frustration: 1
+
+# You need to help the tool when using scripts by enumerating which witnesses
+# need to sign the transaction. This are the keys on your wallet. I commented
+# in the previous scripts which keyHash maps to which key
+# You don't need this hint on normal spending, because it can infer which key owns which UTxO.
+witness:
+  - second
+  - third
+  - fourth
+
+# For Mary NFTs don't forget to match the validity interval, with the one on the
+# time lock policy
+validity-interval:
+  invalid-hereafter: 41770500
+  # invalid before:
+
+# The metadata here allows to describe the NFTs. You can then see them on an explorer
+metadata:
+  721:
+    xkcd:
+      networking:
+        id: 1
+        name: "Networking"
+        description: "Our company is agile and lean with a focus on the long tail."
+        image: ipfs://Qmbu8L59m5YHxo7kSCnfZa9DLSApyLFXTpbcJo6tx8vzzq
+      frustration:
+        id: 2
+        name: "Frustration"
+        description: "Don't worry, I can do it in under a minute."
+        image: ipfs://QmdunoNVjXe8aLFHvPqWdjNZmSfQBnrhb1pPwLcEAJcVUR
+
+# Finally the 4 output. I distribute the newly minted tokens across multiple addresses
+outputs:
+  - address: addr_test1vzdumczkq6clh4048y9nawa6pafrhhd6tq3qyly9d67rx6sq3zpq7 # third-enterprise
+    amount:
+      xkcd:
+        networking: 1
+      reward-tokens:
+        gold: 40
+      lovelace: 10000000
+
+  - address: addr_test1qznwk2s30nyvtgn20z27kqlnezxn6gu3ud8f3zyrxfae3ymk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qt6aaad # second
+    amount:
+      reward-tokens:
+        gold: 60
+        platinum: 15
+      lovelace: 15678910
+
+  - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
+    amount:
+      xkcd:
+        frustration: 1
+      reward-tokens:
+        platinum: 35
+      lovelace: 52468413
+
+  # ALWAYS think about your change address
+  - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
+    change: true
+#+end_src
+Have a look at the transaction on an testnet explorer: [[https://testnet.adatools.io/transactions/9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b][9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b]]
 
 *** Claiming from a Plutus script address
 The plutus script in this example has this validator script

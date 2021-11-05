@@ -103,11 +103,16 @@ All the wallet address-file pairs in the keyring are tested."
         (utxos (cardano-tx--utxos-list))
         (utxos-used (cons (cardano-utils-get-in input-data 'collateral)
                           (--map (cardano-utils-get-in it 'utxo)
-                                 (cardano-utils-get-in input-data 'inputs)))))
-    (delete-dups (--keep (-some->> (cardano-utils-get-in utxos it 'address)
-                           (cardano-utils-get-in wallets)
-                           (replace-regexp-in-string "\\(-enterprise\\)?\\.addr$" ".skey"))
-                         utxos-used))))
+                                 (cardano-utils-get-in input-data 'inputs))))
+        (witness-override (--map (expand-file-name (concat it ".skey") cardano-address-keyring-dir)
+                                 (cardano-utils-get-in input-data 'witness))))
+
+    (-> (--keep (-some->> (cardano-utils-get-in utxos it 'address)
+                  (cardano-utils-get-in wallets)
+                  (replace-regexp-in-string "\\(-enterprise\\)?\\.addr$" ".skey"))
+                utxos-used)
+        (append witness-override)
+        (delete-dups))))
 
 (defun cardano-tx-sign (tx-file witness-keys)
   "Sign a transaction file TX-FILE with WITNESS-KEYS."
@@ -196,7 +201,7 @@ All the wallet address-file pairs in the keyring are tested."
   "Return function to replace minted assets variable names with the actual policy-id from the MINT-ROWS."
   (lambda (input)
     (--reduce-from
-     (replace-regexp-in-string (symbol-name (car it)) (cadr it) acc)
+     (replace-regexp-in-string (car it) (cadr it) acc)
      input
      mint-rows)))
 
@@ -262,6 +267,10 @@ Replace minted assets policy names with function POLICY-NAME-REPLACER."
                                        (cardano-tx--plutus-args input-data)
                                        (cardano-tx--mints mint-rows)
                                        (cardano-tx--validity-interval input-data)
+                                       (when (cardano-utils-get-in input-data 'witness)
+                                         (->> (cardano-tx-witnesses input-data)
+                                              length number-to-string
+                                              (list "--witness-override")))
                                        metadata
                                        "--out-file" tx-file))))
     tx-file))
@@ -370,7 +379,7 @@ Replace minted assets policy names with function POLICY-NAME-REPLACER."
   "Return the eldoc description of address at point."
   (pcase (thing-at-point 'symbol)
     ((pred null) nil)
-    ((and (rx bol "addr") sym)
+    ((and (rx bol "addr" (opt "_test") "1") sym)
      (cardano-address-decode sym))
     ((and (rx bol (= 64 hex)  "#" (+ digit) eol) sym)
      (cardano-tx--utxo-contents (cardano-utils-get-in (cardano-tx--utxos-list) sym)))))

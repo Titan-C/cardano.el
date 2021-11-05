@@ -11,11 +11,11 @@ mint:
           keyHash: `(cardano-address-key-hash (read-file-name "Select verification key file: " cardano-address-keyring-dir
                               nil nil nil (lambda (n) (string-suffix-p ".vkey" n))))`
         - type: before
-          slot: `(->> (cardano-cli "query" "tip") (json-parse-string) (gethash "slot") (+ 3600))` # One hour from current slot
+        slot: ${2:`(->> (cardano-cli "query" "tip") (json-parse-string) (gethash "slot") (+ 3600))`} # One hour from current slot
     assets:
-      ${2:tokenname}: $0
+      ${3:tokenname}: $0
 
 # # For Mary NFTs don't forget to match the validity interval
-# validity interval:
-#   invalid hereafter:
-#   invalid before:
+# validity-interval:
+#   invalid-hereafter: $2
+# #   invalid-before:
