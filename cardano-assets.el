@@ -27,7 +27,7 @@
 ;;
 ;;; Commentary:
 ;;
-;;  Manage cardano ledger assets
+;;  Manage Cardano ledger assets
 ;;
 ;;; Code:
 
@@ -51,21 +51,21 @@
   (cond
    ((numberp value) (format "lovelace: %d" value))
    ;;starting on Mary
-   ((symbolp (car value)) (format "%s: %s" (car value)
-                            (let ((tokens (cdr value)))
-                              (if (numberp tokens)
-                                  tokens
-                                (thread-last (cardano-assets-parse-token-bundle tokens)
-                                  cardano-assets-format-tokens
-                                  (replace-regexp-in-string "^" "  ")
-                                  (concat "\n"))))))
+   ((stringp (car value)) (format "%s: %s" (car value)
+                                  (let ((tokens (cdr value)))
+                                    (if (numberp tokens)
+                                        tokens
+                                      (thread-last (cardano-assets-parse-token-bundle tokens)
+                                        cardano-assets-format-tokens
+                                        (replace-regexp-in-string "^" "  ")
+                                        (concat "\n"))))))
    (t (mapconcat #'cardano-assets-format-tokens value "\n"))))
 
 (defun cardano-assets-flatten (value)
   "Return the flat list representation of VALUE."
   (apply #'append
          (mapcar (-lambda ((asset . quantity))
-                   (if (eq asset 'lovelace)
+                   (if (string= asset 'lovelace)
                        (list quantity)
                      (mapcar (-lambda ((tokenname . amount))
                                (list amount asset tokenname))
@@ -77,14 +77,13 @@
   (cl-flet ((keys (alist) (mapcar #'car alist)))
     (cl-loop with keys = (cl-union (keys alist1) (keys alist2) :test 'equal)
              for k in keys collect
-             (let ((l-one (alist-get k alist1))
-                   (l-two (alist-get k alist2)))
+             (let ((l-one (alist-get k alist1 nil nil #'string=))
+                   (l-two (alist-get k alist2 nil nil #'string=)))
                (cons k (cond ((and (numberp l-one) (numberp l-two))
                               (funcall function l-one l-two))
                              ((and (numberp l-one) (null l-two)) l-one)
                              ((and (numberp l-two) (null l-one)) l-two)
                              (t (cardano-assets-merge-alists function l-one l-two))))))))
-
 
 (provide 'cardano-assets)
 ;;; cardano-assets.el ends here

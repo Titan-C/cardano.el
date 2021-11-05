@@ -1,0 +1,14 @@
+# key: tx
+# name: spend
+# expand-env: ((yas-indent-line 'fixed))
+# --
+inputs:
+  - utxo: `(cardano-tx-helm-utxos)`
+
+outputs:
+  - address:  $1
+    amount:
+      lovelace:  $2
+  # ALWAYS think about your change address
+  - address:  $0
+    change: true

@@ -1,0 +1,13 @@
+# -*- mode: snippet -*-
+# name: meta-nft
+# key: meta-nft
+# expand-env: ((yas-indent-line 'fixed))
+# --
+metadata:
+  721:
+    ${1: Your policy name}:
+      ${2: Tokenname}:
+        id: $5
+        name: $3
+        description: $4
+        image: $0
