@@ -6,7 +6,7 @@
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
 ;; Version: 0.0.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1"))
+;; Package-Requires: ((emacs "25.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -32,8 +32,11 @@
 ;;; Code:
 
 (require 'f)
+(require 'bech32)
+(require 'cbor)
 (require 'subr-x)
 (require 'cardano-cli)
+(require 'logger)
 
 (defgroup cardano-address nil
   "Address functionalities"
@@ -83,16 +86,17 @@ Files are located in keyring dir together with matching address files."
    (split-string
     (read-string "How do you want to name your keys(separate with space for many): ")))
   (let ((keys (mapcar #'file-name-base
-                      (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
-    (message
-     (mapconcat
-      (lambda (name)
-        (if (member name keys)
-            (format "%s: key pair already exists." name)
-          (cardano-address-new-key name)
-          (cardano-address-get-addresses name)
-          (format "%s: New key pair created" name)))
-      names "\n"))))
+                      (directory-files cardano-address-keyring-dir t "\\.vkey$")))
+        (logger-buffer-name "*cardano-log*"))
+    (mapc
+     (lambda (name)
+       (if (member name keys)
+           (logger 'warn "Skip creating %S key pair, because it already exists." name)
+         (cardano-address-new-key name)
+         (cardano-address-get-addresses name)
+         (logger 'info "Created new key pair: %S" name)))
+     names))
+  (message "Keys created"))
 
 (defun cardano-address-payment (name &optional no-stake)
   "Create payment address under NAME.
@@ -134,20 +138,46 @@ Include the wallet staking address unless NO-STAKE is non-nil."
     (cardano-address-staking "stake"))
   (cardano-address-payment name no-stake))
 
-(defun cardano-address-insert ()
+(defun cardano-address-helm ()
   "Let the user select an address from currently managed ones."
   (interactive)
   (let* ((all-addr (mapcar #'file-name-base
                            (directory-files cardano-address-keyring-dir t "\\.addr$")))
          (name (completing-read "Select an address: "
                                 all-addr)))
-    (insert (f-read (expand-file-name (concat name ".addr")
-                                      cardano-address-keyring-dir))
-            " # " name)))
+    (kill-new
+     (concat (f-read (expand-file-name (concat name ".addr")
+                                       cardano-address-keyring-dir))
+             " # " name))))
 
 (defun cardano-address-key-hash (vkey-file)
   "Get the key hash out of the VKEY-FILE."
-  (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))
+  (interactive
+   (list (read-file-name "Select verification key file: " cardano-address-keyring-dir
+                         nil nil nil (lambda (n) (string-suffix-p ".vkey" n)))))
+  (kill-new
+   (concat
+    (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file)
+    " # " (file-name-base vkey-file ))))
+
+(defun cardano-address-decode (address)
+  "Decode ADDRESS string into its representation."
+  (-let (((prefix (key . bt)) (bech32-decode address)))
+    (-> (list
+         (propertize (if (string-suffix-p "test" prefix)
+                         "TestNet" "MainNet")
+                     'face 'font-lock-warning-face)
+         (propertize (pcase key
+                       ((or 0 1) "PubKeyHash")  ;; with stake
+                       ((or 96 97) "PubKeyHash") ;; enterprise
+                       ((or 112 113) "PlutusScript"))
+                     'face 'font-lock-keyword-face)
+         (cbor-string->hexstring (concat (seq-subseq bt 0 28)))
+         (when (and (memq key '(0 1)) (not (null (seq-subseq bt 28))))
+           (propertize "StakingCredential" 'face 'font-lock-keyword-face))
+         (cbor-string->hexstring (concat (seq-subseq bt 28))))
+        (string-join " ")
+        string-trim)))
 
 (provide 'cardano-address)
 ;;; cardano-address.el ends here

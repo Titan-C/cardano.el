@@ -6,7 +6,7 @@
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
 ;; Version: 0.0.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (yaml-mode "0.0.15") (yaml "0.1.0"))
+;; Package-Requires: ((emacs "25.1") (yaml-mode "0.0.15") (yaml "0.1.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -32,6 +32,7 @@
 ;;; Code:
 
 (require 'seq)
+(require 'json)
 (require 'yaml)
 (require 'yaml-mode)
 (require 'logger)
@@ -81,7 +82,7 @@
 
 (defun cardano-cli-json->yaml (json-string)
   "Convert JSON-STRING to yaml."
-  (yaml-encode (json-parse-string json-string)))
+  (yaml-encode (json-read-from-string json-string)))
 
 (defun cardano-cli-tip ()
   "Display in mini-buffer current chain tip."
