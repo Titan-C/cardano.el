@@ -190,7 +190,7 @@ All the wallet address-file pairs in the keyring are tested."
 
 (defun cardano-tx--mints (mint-rows)
   "Generate the mint command options given the MINT-ROWS."
-  (if-let ((value (--map (cons (car it) (cadddr it)) mint-rows)))
+  (if-let ((value (--map (cons (cadr it) (cadddr it)) mint-rows)))
       (list "--mint"
             (cardano-tx--value-amount value)
             (seq-map (-lambda ((_ _ scriptfile))
@@ -199,11 +199,9 @@ All the wallet address-file pairs in the keyring are tested."
 
 (defun cardano-tx--replace-mint-asset-names (mint-rows)
   "Return function to replace minted assets variable names with the actual policy-id from the MINT-ROWS."
-  (lambda (input)
-    (--reduce-from
-     (replace-regexp-in-string (car it) (cadr it) acc)
-     input
-     mint-rows)))
+  (let ((replace-table (--map (cons (car it) (cadr it)) mint-rows)))
+    (lambda (input)
+      (alist-get input replace-table input nil #'string=))))
 
 (defun cardano-tx--data-retrieve (data-type tx-in)
   "Obtain the DATA-TYPE either \"datum\" or \"redeemer\" for TX-IN."
@@ -229,15 +227,11 @@ All the wallet address-file pairs in the keyring are tested."
     (list "--tx-in-collateral" tx-in-collateral
           "--protocol-params-file" params-file)))
 
-(defun cardano-tx--metadata-args (input-data policy-name-replacer)
-  "Generate metadata command arguments from INPUT-DATA.
-Replace minted assets policy names with function POLICY-NAME-REPLACER."
-  (-some--> 'metadata (cardano-utils-get-in input-data it)
-            cardano-utils-alist-key-string json-encode
-            (funcall policy-name-replacer it)
-            (let ((metadata-file (make-temp-file "metadata" nil ".json")))
-              (f-write it 'utf-8 metadata-file)
-              (list "--metadata-json-file" metadata-file) )))
+(defun cardano-tx--metadata-args (metadata)
+  "Generate metadata command for METADATA."
+  (let ((metadata-file (make-temp-file "metadata" nil ".json")))
+    (f-write (json-encode metadata) 'utf-8 metadata-file)
+    (list "--metadata-json-file" metadata-file) ))
 
 (defun cardano-tx--validity-interval (input-data)
   "Generate validity interval command arguments from INPUT-DATA."
@@ -251,28 +245,28 @@ Replace minted assets policy names with function POLICY-NAME-REPLACER."
   "Build a transaction from INPUT-DATA."
   (let* ((mint-rows (cardano-tx--mint-rows (cardano-utils-get-in input-data 'mint)))
          (policy-name-replacer (cardano-tx--replace-mint-asset-names mint-rows))
-         (metadata (cardano-tx--metadata-args input-data policy-name-replacer))
-         (tx-ins
-          (mapcar #'cardano-tx--in-args
-                  (cardano-utils-get-in input-data 'inputs)))
-         (tx-outs
-          (mapcar #'cardano-tx--out-args
-                  (cardano-utils-get-in input-data 'outputs)))
          (tx-file (make-temp-file "cardano-tx-")))
-    (apply #'cardano-cli (--map (funcall policy-name-replacer it)
-                                (flatten-tree
-                                 (list "transaction" "build" "--alonzo-era"
-                                       tx-ins
-                                       tx-outs
-                                       (cardano-tx--plutus-args input-data)
-                                       (cardano-tx--mints mint-rows)
-                                       (cardano-tx--validity-interval input-data)
-                                       (when (cardano-utils-get-in input-data 'witness)
-                                         (->> (cardano-tx-witnesses input-data)
-                                              length number-to-string
-                                              (list "--witness-override")))
-                                       metadata
-                                       "--out-file" tx-file))))
+    (apply #'cardano-cli (flatten-tree
+                          (list "transaction" "build" "--alonzo-era"
+                                (->> 'inputs
+                                     (cardano-utils-get-in input-data)
+                                     (mapcar #'cardano-tx--in-args))
+                                (->> 'outputs
+                                     (cardano-utils-get-in input-data)
+                                     (--map (cardano-tx--out-args
+                                             (cardano-utils-alist-key-string it policy-name-replacer))))
+                                (cardano-tx--mints mint-rows)
+                                (cardano-tx--validity-interval input-data)
+                                (-some--> 'metadata
+                                  (cardano-utils-get-in input-data it)
+                                  (cardano-utils-alist-key-string it policy-name-replacer)
+                                  cardano-tx--metadata-args)
+                                (cardano-tx--plutus-args input-data)
+                                (when (cardano-utils-get-in input-data 'witness)
+                                  (->> (cardano-tx-witnesses input-data)
+                                       length number-to-string
+                                       (list "--witness-override")))
+                                "--out-file" tx-file)))
     tx-file))
 
 (defun cardano-tx-view-or-hash (tx-file &optional hash)

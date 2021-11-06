@@ -57,18 +57,24 @@
               :multiline 400))
   (helm-marked-candidates))
 
-(defun cardano-utils-alist-key-string (alist)
+(defun cardano-utils-alist-key-string (alist &optional replacer-func)
   "Quick & dirty last pass to ensure keys in ALIST are strings.
-It really expects a well formed alist."
+It really expects a well formed alist.
+
+REPLACER-FUNC is optionally a function to replace the keys."
   (mapcar (-lambda ((key . rest))
-            (cons (pcase key
-                    ((pred integerp) (number-to-string key))
-                    ((pred keywordp) (substring (symbol-name key) 1))
-                    ((pred symbolp) (symbol-name key))
-                    (str str))
-                  (if (consp rest)
-                      (cardano-utils-alist-key-string rest)
-                    rest)))
+            (cons (->> (pcase key
+                         ((pred integerp) (number-to-string key))
+                         ((pred keywordp) (substring (symbol-name key) 1))
+                         ((pred symbolp) (symbol-name key))
+                         (str str))
+                       (funcall (or replacer-func #'identity)))
+                  (cond
+                   ((consp rest)
+                    (cardano-utils-alist-key-string rest replacer-func))
+                   ((vectorp rest)
+                    (cl-map 'vector (lambda (it) (cardano-utils-alist-key-string it replacer-func)) rest))
+                   (t rest))))
           alist))
 
 (provide 'cardano-utils)

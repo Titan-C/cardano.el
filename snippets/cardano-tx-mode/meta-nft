@@ -7,7 +7,7 @@ metadata:
   721:
     ${1: Your policy name}:
       ${2: Tokenname}:
-        id: $5
-        name: $3
-        description: $4
+        id: 1
+        name: $2
+        description: $3
         image: $0
