@@ -31,20 +31,20 @@ interface to create my transactions in Cardano. A tool that embraces the power
 of my text editor instead of the limitations of the command line.
 
 * Installation
-This project is not on MELPA, you must install it yourself and deal with all
+This project is not yet on MELPA, you must install it yourself and deal with all
 dependencies as well.
 ** Dependencies
 *** Cardano Node
 You need a running Cardano node you can connect to.
 
-The easiest way to get one setup for the public testnet is using this repo:
+The easiest way to get one setup for the public testnet is using this repository:
 https://github.com/input-output-hk/testnet-summit-scripts
 
 For Mainnet follow the standard guide
 https://docs.cardano.org/getting-started/installing-the-cardano-node
 
 *** Emacs 27
-This is the latest release.
+This is the latest release. Install it and also the following packages.
 
 **** Required packages
 - dash
@@ -54,7 +54,13 @@ This is the latest release.
 - helm
 
 *** This package itself
-Make sure this repo is also in your =EMACSLOADPATH=, then evaluate the file =cardano-tx.el=.
+Clone this repository and make sure it is in your =EMACSLOADPATH=, then evaluate
+the file =cardano-tx.el=.  If you use =use-package= you can use this.
+#+begin_src emacs-lisp
+(use-package cardano-tx
+  :commands (cardano-tx-new cardano-cli-tip)
+  :load-path "/path/to/this/repository")
+#+end_src
 * Configuration
 There are some variables you need to configure.
 
@@ -71,12 +77,12 @@ There are some variables you need to configure.
 ;; This directory will store all your key pairs (verification & signinig) and
 ;; the addresses generated with those keys. It also holds your staking
 ;; key. BE sure this folder exists, It will not be created by this tool
-;; Mind also using separate directories for mainnet and testnets
+;; Mind also to use separate directories for mainnet and testnets
 (setq cardano-address-keyring-dir (expand-file-name "~/wallet/"))
 #+end_src
 * Usage
 Start by interactively querying the tip of the Blockchain. Use: =M-x
-cardano-cli-tip=, you should see on the bottom of the screen on the minibuffer
+cardano-cli-tip=, you should see at the bottom of the screen on the mini-buffer
 the information about the tip.
 
 At the time of writing it showed this:
@@ -149,7 +155,7 @@ outputs:
     amount:
       lovelace: 10000000
 
-  # Payment to a Plutus script. The always succeds script
+  # Payment to a Plutus script. The AlwaysSucceeds script
   - address: addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8
     amount:
       lovelace: 15000000
@@ -180,15 +186,15 @@ When creating this transaction there are utility functions that help you with so
 For example:
 - =cardano-tx-helm-utxos= Pick from utxos that are in your wallet for easy input.
 - =cardano-address-helm= Pick from all your addresses, organized by the key name
-- =cardano-address-from-script= inputs a plutus script and loads to the kill ring the script address
+- =cardano-address-from-script= inputs a Plutus script and loads to the kill ring the script address
 
 The Plutus scripts we send funds in this transaction are
 =contracts/AlwaysSucceeds.plutus= and =contracts/list-in-range.plutus=. The
 first takes any datum, the second takes a two element tuple to define a range.
-That's why the datum needs to be a tuple and we need to use the typed version
-for the datum, because tuples are not available as JSON values.
+That's why the datum needs to be a tuple, and why we need to use the typed
+version for the datum, because tuples are not available as JSON values.
 
-In this repo you can find the datum file used for this example in the path
+In this repository you can find the datum file used for this example in the path
 =plutus-data/tuple_ints(-5,6)=, and it has this content.
 #+begin_src javascript
 {"constructor":0,"fields":[{"int":-5},{"int":6}]}
@@ -199,8 +205,8 @@ cardano-tx-edit-finish=.  That will build the transaction, calculate the fees,
 sign it, submit it, close the editing window and copy the transaction id to the
 clipboard for you to look for it in your favorite explorer.
 
-This transaction has the id [[
- https://testnet.adatools.io/transactions/20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00][20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00]], and is on the
+This transaction has the id
+[[https://testnet.adatools.io/transactions/20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00][20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00]], and is on the
 Testnet.
 *** Minting native tokens
 Minting tokens is again simple and doable with a single specification. Again,
@@ -216,7 +222,7 @@ they are only trees. Follow the comments, a lot is going on in this transaction.
 inputs:
   - utxo: 4fae4f6e9c80d6c56476e083e9562a867ab7a6cd6be4e694d1f0b0e0b8d97eee#0
 
-# Minting policies are characterize by the policy-id, here you can name them,
+# Minting policies are characterized by the policy-id, here you can name them,
 # and use that name throughout the transaction. The editor will then replace the
 # name for the policy-id when creating the transaction.
 
@@ -249,7 +255,7 @@ mint:
       frustration: 1
 
 # You need to help the tool when using scripts by enumerating which witnesses
-# need to sign the transaction. This are the keys on your wallet. I commented
+# need to sign the transaction. These are the keys on your wallet. I commented
 # in the previous scripts which keyHash maps to which key
 # You don't need this hint on normal spending, because it can infer which key owns which UTxO.
 witness:
@@ -342,13 +348,13 @@ One transaction that solves this constraint is:
 inputs:
   # This is the UTxO that created in the previous section
   # Because it is a Plutus script. To unclock it we need to provide extra
-  # information like the plutus script, datum and redeemer
+  # information like the Plutus script, datum and redeemer
   - utxo: 20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00#3
     # path to the script file
     script-file: "contracts/list-in-range.plutus"
     # path to the typed datum
     datumfile: "plutus-data/tuple_ints(-5,6)"
-    # I can directy specify a json value. List are json values and thus
+    # I can directly specify a JSON value. List are JSON values and thus
     # can be directly parsed. There is no need to write the typed version in a file.
     redeemer: [2, -5, -1, 4, 0, 3, 1, 6, -4]
 
@@ -365,13 +371,13 @@ transaction.  In this case the transaction is
 [[https://testnet.adatools.io/transactions/0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8][0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8]] and you can
 find it on the testnet explorer.
 
-That's it. This tools reflects the transaction crafting with a User Interface,
+That's it. This tool reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
 the input, signing and submitting.
 * Extra info
 This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
-some of the winners. I hope it raise awareness of this tool and also to call
+some of the winners. I hope it raises awareness of this tool and also to call
 attention to my Catalyst proposal to fund the further development of this tool.
 
 Unfortunately, it did not receive enough community support for Fund 6. Yet, I'm
