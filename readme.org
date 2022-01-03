@@ -30,6 +30,10 @@ I couldn't find such a tool, thus I started building it myself. A text editable
 interface to create my transactions in Cardano. A tool that embraces the power
 of my text editor instead of the limitations of the command line.
 
+I recorded a short demo video,  https://www.youtube.com/watch?v=Sgvc3WaZlPY. You
+can get the idea of the workflow to create a transaction.
+
+You can support this project by voting on the [[https://cardano.ideascale.com/a/dtd/Transaction-Editor-wallet/385056-48088][Catalyst Fund 7 proposal]].
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
 dependencies as well.
@@ -386,9 +390,6 @@ round.
 
 https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-48088
 
-I recorded a demo video, now a bit outdated
-https://www.youtube.com/watch?v=ocSzYLmYPMQ, but you can get the idea of the
-workflow to create a transaction.
 
 The transaction preview function only works if you compile the cardano-cli-1.29
 with this extra patch.
