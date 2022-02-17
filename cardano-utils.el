@@ -44,7 +44,8 @@
 (defun cardano-utils--reducer-get-in (acc entry)
   "Common function to obtain ENTRY from an ACC object."
   (pcase entry
-    ((and (pred integerp) (guard (or (listp acc) (vectorp acc)))) (elt acc entry))
+    ((and (pred integerp) (guard (or (listp acc) (vectorp acc))))
+     (if (< entry (length acc)) (elt acc entry) nil))
     ((pred keywordp) (plist-get acc entry))
     ((guard (listp acc)) (alist-get entry acc nil nil #'string=))
     ((guard (hash-table-p acc)) (gethash entry acc))))

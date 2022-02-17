@@ -1,0 +1,11 @@
+# -*- mode: snippet -*-
+# name: withdrawals
+# key: withdrawals
+# expand-env: ((yas-indent-line 'fixed))
+# --
+withdrawals:
+  - address: ${1:`(f-read (expand-file-name "stake.stake-addr" cardano-address-keyring-dir))`}
+    amount:
+      lovelace: ${1:$(-> (cardano-tx-rewards (list yas-text)) (cardano-utils-get-in 0 'rewardAccountBalance))}
+
+$0

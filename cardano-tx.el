@@ -60,6 +60,14 @@
 (defvar-local cardano-tx--buffer nil
   "Buffer containing the transaction specification. This is only available on TX preview buffers.")
 
+(defun cardano-tx-rewards (addresses)
+  "Recover the rewards info sitting at ADDRESSES."
+  (let ((rewards-file (make-temp-file "rewards-" nil ".json")))
+    (apply #'cardano-cli "query" "stake-address-info" "--out-file" rewards-file
+           (--mapcat (list "--address" it) addresses))
+    (let ((json-key-type 'string))
+      (json-read-file rewards-file))))
+
 (defun cardano-tx-utxos (addresses)
   "Recover the utxos sitting at ADDRESSES."
   (let ((utxos-file (make-temp-file "utxos-" nil ".json")))
@@ -148,28 +156,35 @@ All the wallet address-file pairs in the keyring are tested."
   "Create sum string of output amount for VALUE."
   (-> (--map (if (numberp it)
                  (number-to-string it)
-               (apply #'format "%d %s.%s" it))
+               (-let (((amount policy tokenname) it))
+                 (format "%d %s.%s" amount policy (cbor-string->hexstring tokenname))))
              (cardano-assets-flatten value))
-      (sort #'string>)  ;; Sorting for lovelace amount first
+      (sort #'string>) ;; Sorting for lovelace amount first
       (string-join "+")))
+
+(defun cardano-tx--format-addr-amount (output)
+  "Format OUTPUT Lisp object with keys address & amount for CLI."
+  (let ((address (cardano-utils-get-in output 'address))
+        (amount  (cardano-utils-get-in output 'amount)))
+    (concat address "+" (cardano-tx--value-amount amount))))
 
 (defun cardano-tx--out-args (tx-out)
   "Generate the command line arguments for TX-OUT."
   (if-let ((target-addr (cardano-utils-nw-p (cardano-utils-get-in tx-out 'address))))
       (if (cardano-utils-get-in tx-out 'change)
           (list "--change-address" target-addr)
-        (list "--tx-out" (format "%s+%s"
-                                 target-addr
-                                 (cardano-tx--value-amount (cardano-utils-get-in tx-out 'amount)))
+        (list "--tx-out" (cardano-tx--format-addr-amount tx-out)
               (-some->> (cardano-tx-datum-hash tx-out) (list "--tx-out-datum-hash"))))))
 
 (defun cardano-tx--translate-mint-policy (mint-script)
   "Convert a MINT-SCRIPT object to JSON-file or pass the JSON-file."
   (if (and (stringp mint-script) (string-suffix-p ".script" mint-script))
       mint-script
-    (let ((script (make-temp-file "mint-policy" nil ".script")))
+    (let ((script (make-temp-file "mint-policy" nil )))
       (f-write (json-encode mint-script) 'utf-8 script)
-      script)))
+      (let ((new-name (concat (file-name-directory script) (cardano-tx-policyid script) ".script")))
+        (rename-file script new-name 'overwrite)
+        new-name))))
 
 (defun cardano-tx-policyid (mint-script-file)
   "Calculate the policy id for MINT-SCRIPT-FILE."
@@ -208,8 +223,7 @@ All the wallet address-file pairs in the keyring are tested."
   (or (-some->> data-type intern (cardano-utils-get-in tx-in) json-encode
                 (list (format "--tx-in-%s-value" data-type)))
       (-some->> (concat data-type "file") intern (cardano-utils-get-in tx-in) expand-file-name
-                (list (format "--tx-in-%s-file" data-type)))
-      (error (format "Missing either %s or %sfile in transaction input" data-type data-type))))
+                (list (format "--tx-in-%s-file" data-type)))))
 
 (defun cardano-tx--in-args (tx-in)
   "Generate the command line arguments for TX-IN."
@@ -233,40 +247,83 @@ All the wallet address-file pairs in the keyring are tested."
     (f-write (json-encode metadata) 'utf-8 metadata-file)
     (list "--metadata-json-file" metadata-file) ))
 
-(defun cardano-tx--validity-interval (input-data)
-  "Generate validity interval command arguments from INPUT-DATA."
-  (list
-   (-some->> (cardano-utils-get-in input-data 'validity-interval 'invalid-before)
-     number-to-string (list "--invalid-before"))
-   (-some->> (cardano-utils-get-in input-data 'validity-interval 'invalid-hereafter)
-     number-to-string (list "--invalid-hereafter"))))
+(defun cardano-tx--validity-interval (validity-interval)
+  "Generate validity interval command arguments from VALIDITY-INTERVAL object."
+  (--map
+   (-some->> (cardano-utils-get-in validity-interval (concat "invalid-" it))
+     number-to-string (list (concat "--invalid-" it)))
+   '("before" "hereafter")))
+
+(defun cardano-tx--withdrawals (withdrawals)
+  "Instructions for WITHDRAWALS."
+  (--map (list "--withdrawal" (cardano-tx--format-addr-amount it)) withdrawals))
+
+(defun cardano-tx--certificates (certificates)
+  "Instructions to upload CERTIFICATES."
+  (--map
+   (-some->> (or (cardano-utils-get-in it 'file)
+                 (cardano-tx--registration-cert it)
+                 (cardano-tx--delegation-cert it))
+     (list "--certificate-file"))
+   certificates))
+
+(defun cardano-tx--registration-cert (cert)
+  "Return registration certificate file or create it if needed from object CERT."
+  (pcase (cardano-utils-get-in cert 'registration)
+    ((pred null) nil)
+    (:null (expand-file-name "stake.cert" cardano-address-keyring-dir))
+    ((and conf (pred listp))
+     (-> (cardano-utils-get-in conf 'vkey-file)
+         (cardano-address-stake-registration-cert)))
+    (_ nil)))
+
+(defun cardano-tx--delegation-cert (cert)
+  "Return delegation certificate file or create it if needed from object CERT."
+  (when-let ((conf (cardano-utils-get-in cert 'delegation)))
+    (cardano-address-delegation-certificate
+     (cardano-utils-get-in conf 'pool)
+     (cardano-utils-get-in conf 'vkey-file))))
+
+(defun cardano-tx--build-instructions (input-data)
+  "Build a transaction from INPUT-DATA."
+  (let* ((mint-rows (cardano-tx--mint-rows (cardano-utils-get-in input-data 'mint)))
+         (policy-name-replacer (cardano-tx--replace-mint-asset-names mint-rows)))
+    (list "transaction" "build" "--alonzo-era"
+          (->> 'inputs
+               (cardano-utils-get-in input-data)
+               (mapcar #'cardano-tx--in-args))
+          (->> 'outputs
+               (cardano-utils-get-in input-data)
+               (--map (cardano-tx--out-args
+                       (cardano-utils-alist-key-string it policy-name-replacer))))
+          (cardano-tx--mints mint-rows)
+          (cardano-tx--validity-interval input-data)
+          (-some->> 'validity-interval
+            (cardano-utils-get-in input-data)
+            (cardano-tx--validity-interval))
+          (-some--> 'metadata
+            (cardano-utils-get-in input-data it)
+            (cardano-utils-alist-key-string it policy-name-replacer)
+            cardano-tx--metadata-args)
+          (cardano-tx--plutus-args input-data)
+          (when (cardano-utils-get-in input-data 'witness)
+            (->> (cardano-tx-witnesses input-data)
+                 length number-to-string
+                 (list "--witness-override")))
+          (-some->> 'certificates
+            (cardano-utils-get-in input-data)
+            (cardano-tx--certificates))
+          (-some->> (cardano-utils-get-in input-data 'withdrawals)
+            (cardano-tx--withdrawals)))))
 
 (defun cardano-tx--build (input-data)
   "Build a transaction from INPUT-DATA."
-  (let* ((mint-rows (cardano-tx--mint-rows (cardano-utils-get-in input-data 'mint)))
-         (policy-name-replacer (cardano-tx--replace-mint-asset-names mint-rows))
-         (tx-file (make-temp-file "cardano-tx-")))
-    (apply #'cardano-cli (flatten-tree
-                          (list "transaction" "build" "--alonzo-era"
-                                (->> 'inputs
-                                     (cardano-utils-get-in input-data)
-                                     (mapcar #'cardano-tx--in-args))
-                                (->> 'outputs
-                                     (cardano-utils-get-in input-data)
-                                     (--map (cardano-tx--out-args
-                                             (cardano-utils-alist-key-string it policy-name-replacer))))
-                                (cardano-tx--mints mint-rows)
-                                (cardano-tx--validity-interval input-data)
-                                (-some--> 'metadata
-                                  (cardano-utils-get-in input-data it)
-                                  (cardano-utils-alist-key-string it policy-name-replacer)
-                                  cardano-tx--metadata-args)
-                                (cardano-tx--plutus-args input-data)
-                                (when (cardano-utils-get-in input-data 'witness)
-                                  (->> (cardano-tx-witnesses input-data)
-                                       length number-to-string
-                                       (list "--witness-override")))
-                                "--out-file" tx-file)))
+  (let* ((tx-file (make-temp-file "cardano-tx-"))
+         (inst (flatten-tree
+                (append
+                 (cardano-tx--build-instructions input-data)
+                 (list "--out-file" tx-file)))))
+    (apply #'cardano-cli inst)
     tx-file))
 
 (defun cardano-tx-view-or-hash (tx-file &optional hash)
@@ -373,7 +430,7 @@ All the wallet address-file pairs in the keyring are tested."
   "Return the eldoc description of address at point."
   (pcase (thing-at-point 'symbol)
     ((pred null) nil)
-    ((and (rx bol "addr" (opt "_test") "1") sym)
+    ((and (rx bol (or "addr" "stake") (opt "_test") "1") sym)
      (cardano-address-decode sym))
     ((and (rx bol (= 64 hex)  "#" (+ digit) eol) sym)
      (cardano-tx--utxo-contents (cardano-utils-get-in (cardano-tx--utxos-list) sym)))))

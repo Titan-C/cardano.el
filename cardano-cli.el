@@ -54,9 +54,9 @@
   :type '(repeat string))
 
 (defvar cardano-cli-skip-network-args
-  (list "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
+  (list "key" "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
         "version" "policyid"
-        "registration-certificate")
+        "registration-certificate" "delegation-certificate")
   "Commands that don't require adding the network arguments.")
 
 (defun cardano-cli (&rest args)

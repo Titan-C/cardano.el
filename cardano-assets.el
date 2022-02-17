@@ -38,12 +38,16 @@
 (require 'cl-lib)
 
 (defun cardano-assets-parse-token-bundle (tokens)
-  "TOKENS come as a vector of vectors or as an alist, make them always alist."
+  "TOKENS come as a vector of vectors or as an alist, make them always alist.
+Token names are now hex encoded-make them readable."
   (cond ((vectorp tokens)
          (seq-map (-lambda ([tk amount])
                     (cons (cbor-hexstring->ascii tk) amount))
                   tokens))
-        ((consp tokens) tokens)
+        ((consp tokens)
+         (seq-map (-lambda ((tk . amount))
+                    (cons (cbor-hexstring->ascii tk) amount))
+                  tokens))
         (t (error "Unexpected token Bundle: %S" tokens))))
 
 (defun cardano-assets-format-tokens (value)

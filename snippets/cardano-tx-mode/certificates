@@ -1,0 +1,15 @@
+# -*- mode: snippet -*-
+# name: certificates
+# key: certificates
+# expand-env: ((yas-indent-line 'fixed))
+# --
+
+certificates:
+  # Specify the certificate file
+  - file: $1
+  # Optionally constuct your certificate
+  # - delegation:
+  #     pool:
+  #     # vkey-file:  # optionally pick the staking verification key file
+  # - registration:
+  #     # vkey-file:  # optionally pick the staking verification key file
