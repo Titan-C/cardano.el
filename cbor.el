@@ -4,7 +4,7 @@
 ;;
 ;; Author: Óscar Nájera <https://oscarnajera.com>
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
+;; Version: 0.2.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
 ;;
@@ -35,15 +35,17 @@
 ;;
 ;;; Code:
 
-(require 'seq)
+(require 'cl-lib)
 (require 'dash)
+(require 'json)
+(require 'seq)
 
 (defun cbor-hexstring->ascii (hex-string)
   "Convert HEX-STRING into ASCII string."
   (->> (string-to-list hex-string)
        (-partition 2)
        (--map (string-to-number (concat it) 16))
-       concat))
+       (apply #'unibyte-string)))
 
 (defun cbor-string->hexstring (s)
   "Encode the string S into a hex string."
@@ -51,6 +53,10 @@
    (lambda (it) (format "%02x" it))
    (string-to-list s)
    ""))
+
+(cl-defstruct (cbor-tag (:constructor cbor-tag-create)
+                        (:copier nil))
+  number content)
 
 (defvar cbor--raw nil
   "BYTESTRING port for access.")
@@ -81,16 +87,15 @@ Default to big-endian unless LITTLE is non-nil."
 
 (defun cbor--get-data-array! (item-count)
   "Get ITEM-COUNT number of array elements."
-  (-> (let (result)
-        (if (eq 'indefinite-length item-count)
-            (let ((value (cbor--get-data-item!)))
-              (while (not (eq value 'break))
-                (push value result)
-                (setq value (cbor--get-data-item!)))
-              result)
-          (dotimes (_ item-count result)
-            (push (cbor--get-data-item!) result))))
-      reverse vconcat))
+  (let (result)
+    (if (eq 'indefinite-length item-count)
+        (let ((value (cbor--get-data-item!)))
+          (while (not (eq value 'break))
+            (push value result)
+            (setq value (cbor--get-data-item!))))
+      (dotimes (_ item-count)
+        (push (cbor--get-data-item!) result)))
+    (vconcat (nreverse result))))
 
 (defun cbor--get-data-map! (pair-count)
   "Get PAIR-COUNT number of map elements."
@@ -99,10 +104,10 @@ Default to big-endian unless LITTLE is non-nil."
         (let ((key (cbor--get-data-item!)))
           (while (not (eq key 'break))
             (push (cons key (cbor--get-data-item!)) result)
-            (setq key (cbor--get-data-item!)))
-          result)
-      (dotimes (_ pair-count result)
-        (push (cons (cbor--get-data-item!) (cbor--get-data-item!)) result)))))
+            (setq key (cbor--get-data-item!))))
+      (dotimes (_ pair-count)
+        (push (cons (cbor--get-data-item!) (cbor--get-data-item!)) result)))
+    (nreverse result)))
 
 (defun cbor--get-data-item! ()
   "Read a single CBOR data item."
@@ -125,12 +130,14 @@ Default to big-endian unless LITTLE is non-nil."
       (4 (cbor--get-data-array! argument))
       ;; map of pairs of data items
       (5 (cbor--get-data-map! argument))
+      ;; cbor tag
+      (6 (cbor-tag-create :number argument :content (cbor--get-data-item!)))
       ;; simple values
       (7
        (pcase additional-information
-         (20 nil)
+         (20 :false) ;; False
          (21 t)
-         (22 nil)
+         (22 nil) ;; NULL
          (31 'break))))))
 
 (defun cbor-hex-p (str)
@@ -139,10 +146,91 @@ Default to big-endian unless LITTLE is non-nil."
 
 (defun cbor->elisp (byte-or-hex-string)
   "Convert BYTE-OR-HEX-STRING into an Emacs Lisp object."
-  (let ((cbor--raw (if (cbor-hex-p byte-or-hex-string)
+  (let ((cbor--raw (if (and (zerop (mod (length byte-or-hex-string) 2))
+                            (cbor-hex-p byte-or-hex-string))
                        (cbor-hexstring->ascii byte-or-hex-string)
                      byte-or-hex-string)))
     (cbor--get-data-item!)))
+
+;; Encoding
+(defun cbor<-elisp (object)
+  "Convert Emacs Lisp OBJECT into cbor encoded hex-string."
+  (with-output-to-string (cbor--put-data-item! object)))
+
+(defun cbor--put-initial-byte! (major-type additional-information)
+  "Encode and push the first byte giving MAJOR-TYPE and ADDITIONAL-INFORMATION."
+  (write-char
+   (logior (ash major-type 5) additional-information)))
+
+(defun cbor--ints->bytelist (uint)
+  "Encode UINT into a list of bytes."
+  (let (stream)
+    (while (> uint 0)
+      (push (logand uint 255) stream)
+      (setq uint (ash uint -8)))
+    (cl-case (length stream)
+      ((1 2 4 8) stream)
+      ((3 7) (cons 0 stream))
+      (6 (append '(0 0) stream))
+      (5 (append '(0 0 0) stream))
+      (t (error "Interger to large to encode")))))
+
+(defun cbor--put-ints! (major-type uint)
+  "Push to the out stream the defined MAJOR-TYPE with quantity UINT."
+  (if (< uint 24)
+      (cbor--put-initial-byte! major-type uint)
+    (let ((bytes (cbor--ints->bytelist uint)))
+      (pcase (length bytes)
+        (1 (cbor--put-initial-byte! major-type 24))
+        (2 (cbor--put-initial-byte! major-type 25))
+        (4 (cbor--put-initial-byte! major-type 26))
+        (8 (cbor--put-initial-byte! major-type 27)))
+      (mapc #'write-char bytes))))
+
+(defun cbor--put-data-item! (value)
+  "Encode Lisp VALUE into cbor list."
+  (cond
+   ((and (integerp value) (<= 0 value))
+    (cbor--put-ints! 0 value))
+   ((and (integerp value) (> 0 value))
+    (cbor--put-ints! 1 (- -1 value)))
+   ;; bytestring are hex encoded
+   ((and (stringp value) (zerop (mod (length value) 2)) (cbor-hex-p value))
+    (let ((rev-list
+           (cbor-hexstring->ascii value)))
+      (cbor--put-ints! 2 (length rev-list))
+      (mapc #'write-char (string-to-list rev-list))))
+
+   ;; Text strings
+   ((stringp value)
+    (progn
+      (cbor--put-ints! 3 (length value))
+      (princ value)))
+   ;; array of data
+   ((vectorp value)
+    (progn
+      (cbor--put-ints! 4 (length value))
+      (mapc #'cbor--put-data-item! value)))
+   ;; map of pairs of data items
+   ((json-alist-p value)
+    (progn
+      (cbor--put-ints! 5 (length value))
+      (mapc (lambda (key-value)
+              (cbor--put-data-item! (car key-value))
+              (cbor--put-data-item! (cdr key-value)))
+            value)))
+   ;; Cbor Tags
+   ((cbor-tag-p value)
+    (progn
+      (cbor--put-ints! 6 (cbor-tag-number value))
+      (cbor--put-data-item! (cbor-tag-content value))))
+   ;; simple values
+   ((eq :false value)
+    (cbor--put-initial-byte! 7 20))
+   ((eq t value)
+    (cbor--put-initial-byte! 7 21))
+   ((null value)
+    (cbor--put-initial-byte! 7 22))))
 
 (provide 'cbor)
 ;;; cbor.el ends here
