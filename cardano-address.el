@@ -93,9 +93,10 @@ Files are located in keyring dir together with matching address files."
        (if (member name keys)
            (logger 'warn "Skip creating %S key pair, because it already exists." name)
          (cardano-address-new-key name)
-         (cardano-address-get-addresses name)
+         (cardano-address-payment name)
          (logger 'info "Created new key pair: %S" name)))
      names))
+  (setq cardano-address--list nil)
   (message "Keys created"))
 
 (defun cardano-address-payment (name &optional no-stake)
@@ -104,6 +105,9 @@ If NO-STAKE is non-nil omit stake key in address."
   (let* ((prefix (expand-file-name name cardano-address-keyring-dir))
          (v-file (concat prefix ".vkey"))
          (address-file (concat prefix (if no-stake "-enterprise" "") ".addr")))
+    (unless (or no-stake (file-exists-p (expand-file-name "stake.vkey" cardano-address-keyring-dir)))
+      (cardano-address-new-key "stake" t)
+      (cardano-address-staking "stake"))
     (apply #'cardano-cli
            "address" "build"
            "--payment-verification-key-file" v-file
@@ -112,31 +116,46 @@ If NO-STAKE is non-nil omit stake key in address."
              (list "--stake-verification-key-file"
                    (expand-file-name "stake.vkey" cardano-address-keyring-dir))))))
 
+(defun cardano-address-stake-registration-cert (vkey-file)
+  "Write stake address registration certificate from VKEY-FILE."
+  (let ((stake-registration-cert-file (concat vkey-file ".cert")))
+    (cardano-cli "stake-address" "registration-certificate"
+                 "--stake-verification-key-file" vkey-file
+                 "--out-file" stake-registration-cert-file)
+    stake-registration-cert-file))
+
 (defun cardano-address-staking (name)
   "Construct staking address for key under NAME."
   (let* ((prefix (expand-file-name name cardano-address-keyring-dir))
          (v-file (concat prefix ".vkey"))
          (stake-addr-file (concat prefix ".stake-addr")))
+    (cardano-address-stake-registration-cert v-file)
     (cardano-cli "stake-address" "build"
                  "--stake-verification-key-file" v-file
                  "--out-file" stake-addr-file)))
 
-(defun cardano-address-from-script (filename)
-  "Calculate the address of a script residing on FILENAME."
+(defun cardano-address-delegation-certificate (pool-id &optional stake-vkey)
+  "Create delegation certificate for POOL-ID.
+Optionally define the STAKE-VKEY file."
+  (let ((delegation-cert-file (make-temp-file "delegation" nil ".cert")))
+    (cardano-cli "stake-address" "delegation-certificate"
+                 "--stake-verification-key-file"
+                 (or stake-vkey (expand-file-name "stake.vkey" cardano-address-keyring-dir))
+                 "--stake-pool-id" pool-id
+                 "--out-file" delegation-cert-file)
+    delegation-cert-file))
+
+(defun cardano-address-from-script (filename &optional stake-key-file)
+  "Calculate the address of a script residing on FILENAME.
+Optionally with the STAKE-KEY-FILE."
   (interactive
    (list (read-file-name "Select Plutus script file: ")))
   (kill-new
-   (cardano-cli "address" "build"
-                "--payment-script-file" (expand-file-name filename))))
-
-(defun cardano-address-get-addresses (name &optional no-stake)
-  "Generate the address files for keys of NAME.
-Include the wallet staking address unless NO-STAKE is non-nil."
-  (setq cardano-address--list nil)
-  (unless (file-exists-p (expand-file-name "stake.vkey" cardano-address-keyring-dir))
-    (cardano-address-new-key "stake" t)
-    (cardano-address-staking "stake"))
-  (cardano-address-payment name no-stake))
+   (apply #'cardano-cli
+          "address" "build"
+          "--payment-script-file" (expand-file-name filename)
+          (when stake-key-file
+            (list "--stake-verification-key-file" stake-key-file)))))
 
 (defun cardano-address-helm ()
   "Let the user select an address from currently managed ones."
@@ -157,7 +176,9 @@ Include the wallet staking address unless NO-STAKE is non-nil."
                          nil nil nil (lambda (n) (string-suffix-p ".vkey" n)))))
   (kill-new
    (concat
-    (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file)
+    (if (string-suffix-p "stake.vkey" vkey-file)
+        (cardano-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
+      (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))
     " # " (file-name-base vkey-file ))))
 
 (defun cardano-address-decode (address)
@@ -167,13 +188,15 @@ Include the wallet staking address unless NO-STAKE is non-nil."
          (propertize (if (string-suffix-p "test" prefix)
                          "TestNet" "MainNet")
                      'face 'font-lock-warning-face)
-         (propertize (pcase key
-                       ((or 0 1) "PubKeyHash")  ;; with stake
-                       ((or 96 97) "PubKeyHash") ;; enterprise
-                       ((or 112 113) "PlutusScript"))
+         (propertize (pcase (ash key -4)
+                       ((or #b0000 #b0110) "PubKeyHash")
+                       ((or #b0001 #b0111) "ScriptHash")
+                       (#b1110 "StakingKey")
+                       (#b1111 "StakingScript")
+                       (else (format "Else%s" else)))
                      'face 'font-lock-keyword-face)
          (cbor-string->hexstring (concat (seq-subseq bt 0 28)))
-         (when (and (memq key '(0 1)) (not (null (seq-subseq bt 28))))
+         (when (and (< (ash key -4) 4) (not (null (seq-subseq bt 28))))
            (propertize "StakingCredential" 'face 'font-lock-keyword-face))
          (cbor-string->hexstring (concat (seq-subseq bt 28))))
         (string-join " ")
