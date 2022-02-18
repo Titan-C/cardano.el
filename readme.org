@@ -2,12 +2,15 @@
 
 This project is a running experiment and in Alpha stage. Don't rely on any of
 its functions or interfaces to be stable, because I'm still testing this user
-interface.
+interface. Feedback is highly welcomed.
 
-Warning aside, I believe this is an awesome way to interact with the Cardano
-blockchain, it frees you from the cumbersome CLI too by offering you a
-declarative way to specify your transactions, without loosing fine grain
-control.
+Warning aside, I and other Cardano users believe this is an awesome way to
+interact with the Cardano blockchain, it frees you from the cumbersome CLI too
+by offering you a declarative way to specify your transactions, without loosing
+fine grain control.
+
+This project has received support from the Cardano community, it is a Catalyst
+Fund 7 funded project and a Plutus Pioneer Capstone challenge prize winner.
 
 * Motivation
 The command line is a great tool, yet if I ever write more than 4 words on the
@@ -30,15 +33,20 @@ I couldn't find such a tool, thus I started building it myself. A text editable
 interface to create my transactions in Cardano. A tool that embraces the power
 of my text editor instead of the limitations of the command line.
 
-I recorded a short demo video,  https://www.youtube.com/watch?v=Sgvc3WaZlPY. You
-can get the idea of the workflow to create a transaction.
+* Video Demos
+I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If in
+doubt this project is for you, have a look at how it can change your workflow:
 
-You can support this project by voting on the [[https://cardano.ideascale.com/a/dtd/Transaction-Editor-wallet/385056-48088][Catalyst Fund 7 proposal]].
+| Content               | link                                        | lenth |
+|-----------------------+---------------------------------------------+-------|
+| Spending transactions | https://www.youtube.com/watch?v=Sgvc3WaZlPY |  6:13 |
+| Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |  9:22 |
+
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
 dependencies as well.
 ** Dependencies
-*** Cardano Node
+*** Cardano Node 1.33
 You need a running Cardano node you can connect to.
 
 The easiest way to get one setup for the public testnet is using this repository:
@@ -82,7 +90,7 @@ There are some variables you need to configure.
 ;; the addresses generated with those keys. It also holds your staking
 ;; key. BE sure this folder exists, It will not be created by this tool
 ;; Mind also to use separate directories for mainnet and testnets
-(setq cardano-address-keyring-dir (expand-file-name "~/wallet/"))
+(setq cardano-address-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
 #+end_src
 * Usage
 Start by interactively querying the tip of the Blockchain. Use: =M-x
@@ -99,6 +107,7 @@ era: Alonzo
 syncProgress: 100.00
 #+end_src
 ** Creating new key pairs and addresses
+*** Bag of keys
 To create new keys and their address use: =M-x cardano-address-new-key-files=.
 It will prompt you how to name your new keys in your wallet. Type a name or many
 space separated names. This will populate the directory you defined in
@@ -113,7 +122,7 @@ M-x cardano-address-new-key-files RET first second third RET
 will generated the following folder structure
 
 #+begin_src bash
-~/wallet/
+~/cardano-wallet-keys/
 ├── first.addr
 ├── first.skey
 ├── first.vkey
@@ -130,14 +139,13 @@ will generated the following folder structure
 
 Go ahead and fund any of these addresses
 ** Crafting a transaction
-
 The goal is to directly create the transaction in your editor instead of using
-the CLI to instruct by commands the crafting of the transaction.
+the CLI commands when crafting of the transaction.
 
 To launch the editor call =M-x cardano-tx-new=. It will list all the UTxOs that
-you control on your wallet. Select one or many, you can still include more into
-your transaction during the edit process later on. A new buffer opens with the
-basic spending transaction template you can directly edit.
+you control on your wallet[fn:1]. Select one or many, you can still include more
+into your transaction during the edit process later on. A new buffer opens with
+the basic spending transaction template you can directly edit.
 
 *** Spending and sending funds to arbitrary addresses
 Have a look at the next annotated example. It is a larger than usual
@@ -147,7 +155,7 @@ a simple and standard yaml file. The structure reflects intuitively what the
 transaction itself is about.  I'm sure you can understand it just by reading it.
 
 #+begin_src yaml
-# This are the inputs for the transaction.
+# These are the inputs for the transaction.
 inputs:
   - utxo: 4ea2254f4449af35b730b08f864663f1f0fd7a8a659e2fcf9a21fe891c2991d1#0
   - utxo: e0beb22982562e607019e6bb7f8cba200bba5f858c94bf6fd97ef4431ccb8be8#0
@@ -189,7 +197,7 @@ get to comment within blocks of instructions.
 When creating this transaction there are utility functions that help you with some input.
 For example:
 - =cardano-tx-helm-utxos= Pick from utxos that are in your wallet for easy input.
-- =cardano-address-helm= Pick from all your addresses, organized by the key name
+- =cardano-address-helm= Pick from all your wallet addresses, organized by the key name
 - =cardano-address-from-script= inputs a Plutus script and loads to the kill ring the script address
 
 The Plutus scripts we send funds in this transaction are
@@ -215,7 +223,7 @@ Testnet.
 *** Minting native tokens
 Minting tokens is again simple and doable with a single specification. Again,
 exemplifying with a rather large transaction, where I'll mint two kinds of
-token: a fungible token with unconstrained minting policy and a NFT policy.
+tokens: a fungible token with unconstrained minting policy and a NFT policy.
 Additionally, the NFT metadata will include its metadata.
 
 Launch the editor with =M-x cardano-tx-new=, and pick some UTxOs to fund the
@@ -267,8 +275,8 @@ witness:
   - third
   - fourth
 
-# For Mary NFTs don't forget to match the validity interval, with the one on the
-# time lock policy
+# For Mary Era Timelocked NFTs don't forget to match the validity interval, with
+# the one on the time lock policy
 validity-interval:
   invalid-hereafter: 41770500
   # invalid before:
@@ -276,13 +284,13 @@ validity-interval:
 # The metadata here allows to describe the NFTs. You can then see them on an explorer
 metadata:
   721:
-    xkcd:
-      networking:
+    xkcd: # policy name
+      networking: # token name
         id: 1
         name: "Networking"
         description: "Our company is agile and lean with a focus on the long tail."
         image: ipfs://Qmbu8L59m5YHxo7kSCnfZa9DLSApyLFXTpbcJo6tx8vzzq
-      frustration:
+      frustration: # token name
         id: 2
         name: "Frustration"
         description: "Don't worry, I can do it in under a minute."
@@ -292,10 +300,10 @@ metadata:
 outputs:
   - address: addr_test1vzdumczkq6clh4048y9nawa6pafrhhd6tq3qyly9d67rx6sq3zpq7 # third-enterprise
     amount:
-      xkcd:
-        networking: 1
-      reward-tokens:
-        gold: 40
+      xkcd: # policy name
+        networking: 1 # token name
+      reward-tokens: # other policy name
+        gold: 40 # corresponding token name
       lovelace: 10000000
 
   - address: addr_test1qznwk2s30nyvtgn20z27kqlnezxn6gu3ud8f3zyrxfae3ymk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qt6aaad # second
@@ -318,6 +326,10 @@ outputs:
     change: true
 #+end_src
 Have a look at the transaction on an testnet explorer: [[https://testnet.adatools.io/transactions/9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b][9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b]]
+
+Notice that the token names are still described by human readable strings. The
+editor translates those names to hexadecimal values when creating the
+transaction as required by the cardano-node=1.33.
 
 *** Claiming from a Plutus script address
 The Plutus script in this example has this validator script, and corresponds to
@@ -394,3 +406,9 @@ https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-480
 The transaction preview function only works if you compile the cardano-cli-1.29
 with this extra patch.
 https://github.com/input-output-hk/cardano-node/pull/3082#issuecomment-899083656
+
+* Footnotes
+
+[fn:1] Finding the UTxOs takes a while and thus your editor blocks during that
+time. Since the cardano-node=1.33 the UTxO set moved from RAM to Disk and that
+makes this query even slower.
