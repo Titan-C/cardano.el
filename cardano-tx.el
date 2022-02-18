@@ -60,13 +60,21 @@
 (defvar-local cardano-tx--buffer nil
   "Buffer containing the transaction specification. This is only available on TX preview buffers.")
 
-(defun cardano-tx-rewards (addresses)
-  "Recover the rewards info sitting at ADDRESSES."
-  (let ((rewards-file (make-temp-file "rewards-" nil ".json")))
-    (apply #'cardano-cli "query" "stake-address-info" "--out-file" rewards-file
-           (--mapcat (list "--address" it) addresses))
-    (let ((json-key-type 'string))
-      (json-read-file rewards-file))))
+(defun cardano-tx-rewards (address)
+  "Recover the rewards info sitting at ADDRESS."
+  (interactive (list (read-string "Stake address: "
+                                  (thing-at-point 'symbol))))
+  (let ((rewards-file (make-temp-file "rewards-" nil ".json"))
+        (json-key-type 'string))
+    (cardano-cli "query" "stake-address-info" "--out-file" rewards-file
+                 "--address" address)
+    (when-let ((result
+                (cardano-utils-get-in (json-read-file rewards-file) 0)))
+      (when (called-interactively-p 'interactive)
+        (cardano-cli-pretty-yaml-message result))
+      (kill-new
+       (number-to-string
+        (cardano-utils-get-in result 'rewardAccountBalance))))))
 
 (defun cardano-tx-utxos (addresses)
   "Recover the utxos sitting at ADDRESSES."
@@ -269,13 +277,15 @@ All the wallet address-file pairs in the keyring are tested."
 
 (defun cardano-tx--registration-cert (cert)
   "Return registration certificate file or create it if needed from object CERT."
-  (pcase (cardano-utils-get-in cert 'registration)
-    ((pred null) nil)
-    (:null (expand-file-name "stake.cert" cardano-address-keyring-dir))
-    ((and conf (pred listp))
-     (-> (cardano-utils-get-in conf 'vkey-file)
-         (cardano-address-stake-registration-cert)))
-    (_ nil)))
+  (let ((default-stake-key (expand-file-name "stake.vkey" cardano-address-keyring-dir)))
+    (pcase (cardano-utils-get-in cert 'registration)
+      ((pred null) nil)
+      (:null (cardano-address-stake-registration-cert default-stake-key))
+      ((and conf (pred listp))
+       (-> (or (cardano-utils-get-in conf 'vkey-file) default-stake-key)
+           (cardano-address-stake-registration-cert
+            (cardano-utils-get-in conf 'deregistration))))
+      (_ nil))))
 
 (defun cardano-tx--delegation-cert (cert)
   "Return delegation certificate file or create it if needed from object CERT."

@@ -35,7 +35,7 @@
                    #'string-lessp)
              (list "." ".."
                    "hi.addr" "hi.skey" "hi.vkey"
-                   "stake.skey" "stake.stake-addr" "stake.vkey" "stake.vkey.cert"
+                   "stake.skey" "stake.stake-addr" "stake.vkey"
                    "there.addr" "there.skey" "there.vkey")))))
 
 (ert-deftest test-address-decode ()

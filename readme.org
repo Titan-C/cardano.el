@@ -37,10 +37,11 @@ of my text editor instead of the limitations of the command line.
 I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If in
 doubt this project is for you, have a look at how it can change your workflow:
 
-| Content               | link                                        | length |
+| Content               | Link                                        | Length |
 |-----------------------+---------------------------------------------+--------|
 | Spending transactions | https://www.youtube.com/watch?v=Sgvc3WaZlPY |   6:13 |
 | Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
+| Stake delegation      | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
 
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
@@ -332,6 +333,71 @@ Have a look at the transaction on an testnet explorer: [[https://testnet.adatool
 Notice that the token names are still described by human readable strings. The
 editor translates those names to hexadecimal values when creating the
 transaction as required by the cardano-node=1.33.
+
+*** Registering stake address and delegating to a stakepool
+The transaction to register and delegate at the same time looks like this:
+#+begin_src yaml
+input:
+  - utxo: 83fa0a223783c9fb8a610433d75778c29945151a7bd7957e7c8c8289d7dc9e79#0
+
+outputs:
+  # ALWAYS think about your change address
+  - address:  addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
+    change: true
+
+certificates:
+  # Standard certificates
+  - registration:
+      # vkey-file:  # optionally pick the staking verification key file
+      # deregistration: true
+  - delegation:
+      pool: pool1hqatqegjcnsg8lj66ys2fe2zg8vl7hjsfy2yupcpnxxqucx8zgq
+      # vkey-file:  # optionally pick the staking verification key file
+  # Specify your particular certificate file
+  # - file:
+
+# You must sign with the stake key to authorize the certificate
+witness:
+  - stake
+#+end_src
+
+It is important to note, that you must register the stake address before you
+delegate your stake. If you are doing both actions in the same transaction, then
+make sure that the =registration= item is before the =delegation= item (like in
+this example) otherwise the transaction will fail. If you want to do this on
+separate transactions, it still holds to register before you delegate.
+
+This sample transaction is also on the testnet under the txid:
+[[https://testnet.cardanoscan.io/transaction/d77ecc5c249a7875fcae8a4dc0940b62a214d4fbcdc9e82a0ba4c38607b8ea2d][d77ecc5c249a7875fcae8a4dc0940b62a214d4fbcdc9e82a0ba4c38607b8ea2d]]
+
+*** Withdraw your staking rewards
+Withdrawing is again just another element of your transaction.
+
+#+begin_src yaml
+input:
+  - utxo: 8bdfcfa7faa87f32c624700d1bec7fb0cd3af0ed3fb9e7a5e1121bc52433e645#0
+
+outputs:
+  # ALWAYS think about your change address
+  - address:  addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
+    change: true
+
+withdrawals:
+  # Specify from which staking address you withdraw the rewards
+  - address: stake_test1urpklgzqsh9yqz8pkyuxcw9dlszpe5flnxjtl55epla6ftqktdyfz
+    amount:
+      lovelace: 315716
+
+# You must sign with the stake key because you spend from the staking address
+witness:
+  - stake
+#+end_src
+
+The function =cardano-tx-rewards= receives as input the staking addresses and
+helps you with the total amount in the rewards.
+
+This sample transaction is also on the testnet under the txid:
+[[https://testnet.cardanoscan.io/transaction/81eaf7c476709599a1d2162104714cf5ab9b0b3d4b65287efcfd58483e8a3768][81eaf7c476709599a1d2162104714cf5ab9b0b3d4b65287efcfd58483e8a3768]]
 
 *** Claiming from a Plutus script address
 The Plutus script in this example has this validator script, and corresponds to

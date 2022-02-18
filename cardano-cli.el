@@ -31,11 +31,11 @@
 ;;
 ;;; Code:
 
-(require 'seq)
+(require 'cardano-log)
 (require 'json)
+(require 'subr-x)
 (require 'yaml)
 (require 'yaml-mode)
-(require 'cardano-log)
 
 (defgroup cardano-cli nil
   "Integration with cardano cli"
@@ -56,7 +56,9 @@
 (defvar cardano-cli-skip-network-args
   (list "key" "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
         "version" "policyid"
-        "registration-certificate" "delegation-certificate")
+        "registration-certificate"
+        "deregistration-certificate"
+        "delegation-certificate")
   "Commands that don't require adding the network arguments.")
 
 (defun cardano-cli (&rest args)
@@ -79,19 +81,22 @@
             (cardano-log 'error err-msg)
             (error err-msg)))))))
 
-(defun cardano-cli-json->yaml (json-string)
-  "Convert JSON-STRING to yaml."
-  (yaml-encode (json-read-from-string json-string)))
+(defun cardano-cli-pretty-yaml-message (obj)
+  "Encode OBJ into yaml and display on mini buffer."
+  (with-temp-buffer
+    (yaml-mode)
+    (thread-first obj
+      yaml-encode
+      insert)
+    (font-lock-ensure)
+    (message (buffer-string))))
 
 (defun cardano-cli-tip ()
   "Display in mini-buffer current chain tip."
   (interactive)
-  (with-temp-buffer
-    (yaml-mode)
-    (insert
-     (cardano-cli-json->yaml (cardano-cli "query" "tip")))
-    (font-lock-ensure)
-    (message (buffer-string))))
+  (thread-first (cardano-cli "query" "tip")
+    json-read-from-string
+    cardano-cli-pretty-yaml-message))
 
 (defun cardano-cli-version ()
   "Print the current cli version."

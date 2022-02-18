@@ -115,10 +115,14 @@ If NO-STAKE is non-nil omit stake key in address."
              (list "--stake-verification-key-file"
                    (expand-file-name "stake.vkey" cardano-address-keyring-dir))))))
 
-(defun cardano-address-stake-registration-cert (vkey-file)
-  "Write stake address registration certificate from VKEY-FILE."
-  (let ((stake-registration-cert-file (concat vkey-file ".cert")))
-    (cardano-cli "stake-address" "registration-certificate"
+(defun cardano-address-stake-registration-cert (vkey-file &optional leave)
+  "Write stake address registration certificate from VKEY-FILE.
+If LEAVE deregister."
+  (let* ((action (pcase leave
+                   ((or :false (pred null)) "registration")
+                   (_ "deregistration")))
+         (stake-registration-cert-file (concat vkey-file "." action ".cert")))
+    (cardano-cli "stake-address" (concat action "-certificate")
                  "--stake-verification-key-file" vkey-file
                  "--out-file" stake-registration-cert-file)
     stake-registration-cert-file))
@@ -128,7 +132,6 @@ If NO-STAKE is non-nil omit stake key in address."
   (let* ((prefix (expand-file-name name cardano-address-keyring-dir))
          (v-file (concat prefix ".vkey"))
          (stake-addr-file (concat prefix ".stake-addr")))
-    (cardano-address-stake-registration-cert v-file)
     (cardano-cli "stake-address" "build"
                  "--stake-verification-key-file" v-file
                  "--out-file" stake-addr-file)))
