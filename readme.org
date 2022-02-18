@@ -37,10 +37,10 @@ of my text editor instead of the limitations of the command line.
 I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If in
 doubt this project is for you, have a look at how it can change your workflow:
 
-| Content               | link                                        | lenth |
-|-----------------------+---------------------------------------------+-------|
-| Spending transactions | https://www.youtube.com/watch?v=Sgvc3WaZlPY |  6:13 |
-| Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |  9:22 |
+| Content               | link                                        | length |
+|-----------------------+---------------------------------------------+--------|
+| Spending transactions | https://www.youtube.com/watch?v=Sgvc3WaZlPY |   6:13 |
+| Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
 
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
