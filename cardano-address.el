@@ -36,7 +36,7 @@
 (require 'cbor)
 (require 'subr-x)
 (require 'cardano-cli)
-(require 'logger)
+(require 'cardano-log)
 
 (defgroup cardano-address nil
   "Address functionalities"
@@ -86,15 +86,14 @@ Files are located in keyring dir together with matching address files."
    (split-string
     (read-string "How do you want to name your keys(separate with space for many): ")))
   (let ((keys (mapcar #'file-name-base
-                      (directory-files cardano-address-keyring-dir t "\\.vkey$")))
-        (logger-buffer-name "*cardano-log*"))
+                      (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
     (mapc
      (lambda (name)
        (if (member name keys)
-           (logger 'warn "Skip creating %S key pair, because it already exists." name)
+           (cardano-log 'warn "Skip creating %S key pair, because it already exists." name)
          (cardano-address-new-key name)
          (cardano-address-payment name)
-         (logger 'info "Created new key pair: %S" name)))
+         (cardano-log 'info "Created new key pair: %S" name)))
      names))
   (setq cardano-address--list nil)
   (message "Keys created"))

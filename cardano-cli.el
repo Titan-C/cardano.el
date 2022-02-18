@@ -35,7 +35,7 @@
 (require 'json)
 (require 'yaml)
 (require 'yaml-mode)
-(require 'logger)
+(require 'cardano-log)
 
 (defgroup cardano-cli nil
   "Integration with cardano cli"
@@ -62,11 +62,10 @@
 (defun cardano-cli (&rest args)
   "Call the cli interface connected to the node socket pass ARGS."
   (let ((process-environment (list (concat "CARDANO_NODE_SOCKET_PATH=" cardano-cli-node-socket)))
-        (logger-buffer-name "*cardano-log*")
         (cmd (if (seq-intersection cardano-cli-skip-network-args args)
                  args
                (append args cardano-cli-network-args))))
-    (logger 'debug "%s %s" cardano-cli-command (mapconcat #'prin1-to-string cmd " "))
+    (cardano-log 'debug "%s %s" cardano-cli-command (mapconcat #'prin1-to-string cmd " "))
     (with-temp-buffer
       (let ((result
              (apply #'call-process cardano-cli-command nil (current-buffer) nil
@@ -77,7 +76,7 @@
           (when (re-search-forward "Usage:" nil 'end)
             (backward-sentence))
           (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
-            (logger 'error err-msg)
+            (cardano-log 'error err-msg)
             (error err-msg)))))))
 
 (defun cardano-cli-json->yaml (json-string)

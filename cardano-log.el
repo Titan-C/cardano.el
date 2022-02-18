@@ -1,10 +1,10 @@
-;;; logger.el --- Logging System -*- lexical-binding: t; -*-
+;;; cardano-log.el --- Logging System -*- lexical-binding: t; -*-
 ;;
-;; Copyright (C) 2021 Óscar Nájera
+;; Copyright (C) 2021-2022 Óscar Nájera
 ;;
 ;; Author: Óscar Nájera <https://oscarnajera.com>
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
+;; Version: 0.1.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1"))
 ;;
@@ -35,21 +35,21 @@
 
 (require 'subr-x)
 
-(defvar logger-buffer-name "*logger*"
+(defvar cardano-log-buffer-name "*cardano-log*"
   "Name of buffer used for logging events.")
 
-(defvar logger-level 'info
+(defvar cardano-log-level 'info
   "Lowest type of messages to be logged.")
 
-(defun logger-buffer ()
-  "Return the buffer for `logger', creating it as needed."
-  (if-let ((buffer (get-buffer logger-buffer-name)))
+(defun cardano-log-buffer ()
+  "Return the buffer for `cardano-log', creating it as needed."
+  (if-let ((buffer (get-buffer cardano-log-buffer-name)))
       buffer
-    (with-current-buffer (generate-new-buffer logger-buffer-name)
+    (with-current-buffer (generate-new-buffer cardano-log-buffer-name)
       (special-mode)
       (current-buffer))))
 
-(defun logger--level-number (level)
+(defun cardano-log--level-number (level)
   "Return a relative level number for LEVEL."
   (pcase level
     ('debug -10)
@@ -58,7 +58,7 @@
     ('error 20)
     (_ -10)))
 
-(defun logger--level-face (level)
+(defun cardano-log--level-face (level)
   "Return the font-lock-face for the give LEVEL."
   (pcase level
     ('debug 'font-lock-comment-face)
@@ -66,23 +66,23 @@
     ('warn 'font-lock-warning-face)
     ('error 'font-lock-keyword-face)))
 
-(defun logger (level fmt &rest objects)
+(defun cardano-log (level fmt &rest objects)
   "Write log message FMT at LEVEL to log buffer.
 
 LEVEL should be a symbol: debug, info, warn, error.
 FMT must be a string suitable for `format' given OBJECTS as arguments."
-  (when (>= (logger--level-number level)
-            (logger--level-number logger-level))
+  (when (>= (cardano-log--level-number level)
+            (cardano-log--level-number cardano-log-level))
     (let ((inhibit-read-only t))
-      (with-current-buffer (logger-buffer)
+      (with-current-buffer (cardano-log-buffer)
         (goto-char (point-max))
         (insert
          (format
           (concat "[" (propertize "%s" 'face 'font-lock-constant-face) "] "
-                  "[" (propertize "%s" 'face (logger--level-face level)) "]: %s\n")
+                  "[" (propertize "%s" 'face (cardano-log--level-face level)) "]: %s\n")
           (format-time-string "%Y-%m-%d %H:%M:%S")
           (upcase (symbol-name level))
           (apply #'format fmt objects)))))))
 
-(provide 'logger)
-;;; logger.el ends here
+(provide 'cardano-log)
+;;; cardano-log.el ends here

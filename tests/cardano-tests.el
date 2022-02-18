@@ -19,7 +19,6 @@
 (require 'cardano-assets)
 (require 'cardano-tx)
 (require 'cardano-utils)
-(require 'cardano-wallet)
 (require 'ert)
 
 (ert-deftest test-parse-token-bundle ()

@@ -91,6 +91,8 @@ There are some variables you need to configure.
 ;; key. BE sure this folder exists, It will not be created by this tool
 ;; Mind also to use separate directories for mainnet and testnets
 (setq cardano-address-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
+;; In case you want to log the CLI commands used
+(setq cardano-log-level 'debug)
 #+end_src
 * Usage
 Start by interactively querying the tip of the Blockchain. Use: =M-x
