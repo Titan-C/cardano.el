@@ -51,7 +51,7 @@
   "Encode the string S into a hex string."
   (mapconcat
    (lambda (it) (format "%02x" it))
-   (string-to-list s)
+   s
    ""))
 
 (cl-defstruct (cbor-tag (:constructor cbor-tag-create)

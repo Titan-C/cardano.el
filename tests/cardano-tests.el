@@ -34,9 +34,31 @@
              (sort (directory-files cardano-address-keyring-dir)
                    #'string-lessp)
              (list "." ".."
-                   "hi.addr" "hi.skey" "hi.vkey"
-                   "stake.skey" "stake.stake-addr" "stake.vkey"
-                   "there.addr" "there.skey" "there.vkey")))))
+                   "hi.skey" "hi.vkey"
+                   "there.skey" "there.vkey")))))
+
+(ert-deftest address-validate-hd-path ()
+  (pcase-dolist (`(,input ,result)
+                 '(("5H" (5H))
+                   ("5/2H/8" (5 2H 8))
+                   ("PA" nil)
+                   ("" nil)
+                   (5 nil)
+                   ((4 5H 2) (4 5H 2))))
+    (should (equal (cardano-address--validate-hd-path input) result))))
+
+(ert-deftest address-constructor ()
+  (pcase-dolist (`(,spend-type ,spend-hash ,reward-type ,reward-hash ,network-id ,address ,header)
+                 `((keyhash "aa" keyhash "LQ" 0 "addr_test1qpskznz3f3nq0g" 0)
+                   (keyhash "aa" nil     nil  0 "addr_test1vpskzt77wgk" #b01100000)
+                   (script  "aa" nil     nil  0 "addr_test1wpskzrujzz5" #b01110000)
+                   (keyhash "aa" script  "LQ" 1 "addr1y9skznz3urda7x" #b00100001)
+                   (nil     nil  script  "LQ" 2 "stake17fx9zpctvfz" #b11110010)
+                   (nil     nil  keyhash "LQ" 3 "stake1udx9zlrdnxa" #b11100011)))
+    (should (equal (cardano-address-build
+                    spend-type spend-hash reward-type reward-hash network-id)
+                   address))
+    (should (equal (caadr (bech32-decode address)) header))))
 
 (ert-deftest test-address-decode ()
   (should (equal

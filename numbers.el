@@ -78,17 +78,15 @@ Consider current setting of user variables."
   (save-excursion
     (save-match-data
       (goto-char beg)
-      (let (ret)
-        (while (re-search-forward (rx word-boundary
-                                      (group  (1+ digit)
-                                              word-boundary)) end t)
-          (when (> (length (match-string 1)) numbers-separator-ignore-threshold)
-            (dolist (ins (number-sequence
-                          (- (match-end 1) numbers-separator-interval)
-                          (1+ (match-beginning 1))
-                          (- numbers-separator-interval)))
-              (numbers-make-overlay ins (1+ ins)))))
-        ret))))
+      (while (re-search-forward (rx word-boundary
+                                    (group  (1+ digit)
+                                            word-boundary)) end t)
+        (when (> (length (match-string 1)) numbers-separator-ignore-threshold)
+          (dolist (ins (number-sequence
+                        (- (match-end 1) numbers-separator-interval)
+                        (1+ (match-beginning 1))
+                        (- numbers-separator-interval)))
+            (numbers-make-overlay ins (1+ ins))))))))
 
 (defun numbers-change (beg end)
   "After-change function updating numbers overlays between BEG to END."

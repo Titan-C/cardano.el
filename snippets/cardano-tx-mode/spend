@@ -10,5 +10,5 @@ outputs:
     amount:
       lovelace:  $0
   # ALWAYS think about your change address
-  - address:  `(cardano-address-helm)`
+  - address:  `(cardano-address-pick)`
     change: true

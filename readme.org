@@ -4,9 +4,9 @@ This project is a running experiment and in Alpha stage. Don't rely on any of
 its functions or interfaces to be stable, because I'm still testing this user
 interface. Feedback is highly welcomed.
 
-Warning aside, I and other Cardano users believe this is an awesome way to
-interact with the Cardano blockchain, it frees you from the cumbersome CLI too
-by offering you a declarative way to specify your transactions, without loosing
+Warning aside, myself and other Cardano users believe this is an awesome way to
+interact with the Cardano blockchain, it frees you from the cumbersome CLI  by
+offering you a declarative way to specify your transactions, without loosing
 fine grain control.
 
 This project has received support from the Cardano community, it is a Catalyst
@@ -34,14 +34,19 @@ interface to create my transactions in Cardano. A tool that embraces the power
 of my text editor instead of the limitations of the command line.
 
 * Video Demos
-I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If in
-doubt this project is for you, have a look at how it can change your workflow:
+I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If
+you doubt whether this project is for you, have a look at how it can change your
+workflow:
 
 | Content               | Link                                        | Length |
 |-----------------------+---------------------------------------------+--------|
 | Spending transactions | https://www.youtube.com/watch?v=Sgvc3WaZlPY |   6:13 |
 | Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
 | Stake delegation      | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
+
+The videos are a show case of this project, yet as this project develops not
+they naturally become obsolete. The documentation bellow is an up to date
+reference.
 
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
@@ -56,11 +61,12 @@ https://github.com/input-output-hk/testnet-summit-scripts
 For Mainnet follow the standard guide
 https://docs.cardano.org/getting-started/installing-the-cardano-node
 
-*** Emacs 27
+*** Emacs
 This is the latest release. Install it and also the following packages.
 
 **** Required packages
 - dash
+- f
 - yaml
 - yaml-mode
 - yasnippet
@@ -114,9 +120,7 @@ syncProgress: 100.00
 To create new keys and their address use: =M-x cardano-address-new-key-files=.
 It will prompt you how to name your new keys in your wallet. Type a name or many
 space separated names. This will populate the directory you defined in
-=cardano-address-keyring-dir=, with the keys. It will also create a staking key
-for the directory and finally create the corresponding wallet addresses with the
-staking key.
+=cardano-address-keyring-dir=, with the keys.
 
 This means:
 #+begin_src emacs-lisp
@@ -126,21 +130,30 @@ will generated the following folder structure
 
 #+begin_src bash
 ~/cardano-wallet-keys/
-├── first.addr
 ├── first.skey
 ├── first.vkey
-├── second.addr
 ├── second.skey
 ├── second.vkey
-├── stake.skey
-├── stake.stake-addr
-├── stake.vkey
-├── third.addr
 ├── third.skey
 └── third.vkey
 #+end_src
 
-Go ahead and fund any of these addresses
+Please keep in mind, that all keys are plain text files on your system. Thus
+when working with "mainnet" ADA, make sure you take the necessary precautions to
+secure your files, work on air gapped machine.
+
+Simultaneously it will populate the variable =cardano-address--list=, with the
+matching address for each of those keys. At this stake all those address are not linked to a reward address. To create a staking key use the command:
+#+begin_src emacs-lisp
+(cardano-address-new-key "stake" t)
+#+end_src
+
+The name =stake= is a conventionally privileged name. That key will generates
+the reward account when creating the addresses. Once you have that key, use the
+function =cardano-address-populate= to update your address list to have
+addresses with staking reward account.
+
+Now, go ahead and fund any of your addresses
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using
 the CLI commands when crafting of the transaction.
@@ -200,7 +213,7 @@ get to comment within blocks of instructions.
 When creating this transaction there are utility functions that help you with some input.
 For example:
 - =cardano-tx-helm-utxos= Pick from utxos that are in your wallet for easy input.
-- =cardano-address-helm= Pick from all your wallet addresses, organized by the key name
+- =cardano-address-pick= Pick from all your wallet addresses
 - =cardano-address-from-script= inputs a Plutus script and loads to the kill ring the script address
 
 The Plutus scripts we send funds in this transaction are
@@ -458,6 +471,22 @@ find it on the testnet explorer.
 That's it. This tool reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
 the input, signing and submitting.
+** Hierarchical Deterministic Wallets
+You can also install [[https://github.com/input-output-hk/cardano-addresses][cardano-addresses]] and let this tool help you manage your
+keys following the CIP-3 specification, and CIP-11.
+
+The function =cardano-address-gen-recovery-phrase= will assist you creating a
+mnemonic seed recovery phrase and save it on your =cardano-address-keyring=.
+Please keep in mind, that all keys and recovery phrases are plain text files on
+your system. Thus when working with "mainnet" ADA, make sure you take the
+necessary precautions to secure your files, work on air gapped machine.
+
+Using the function =cardano-address-new-hd-key-files= you'll be prompted for a
+derivation path for your key. Following CIP-11 the path =1852H/1815H/0/2/0= will
+generate the staking key.
+
+After creating you keys along your desired derivation path use
+=cardano-address-populate= to fill up your address list.
 * Extra info
 This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
@@ -469,11 +498,6 @@ releasing most of the work done in advance. I will re-apply on the next funding
 round.
 
 https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-48088
-
-
-The transaction preview function only works if you compile the cardano-cli-1.29
-with this extra patch.
-https://github.com/input-output-hk/cardano-node/pull/3082#issuecomment-899083656
 
 * Footnotes
 

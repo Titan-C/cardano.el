@@ -33,12 +33,13 @@
 
 (require 'cardano-log)
 (require 'json)
+(require 'seq)
 (require 'subr-x)
 (require 'yaml)
 (require 'yaml-mode)
 
 (defgroup cardano-cli nil
-  "Integration with cardano cli"
+  "Integration with cardano-cli."
   :group 'cardano)
 
 (defcustom cardano-cli-command (executable-find "cardano-cli")
@@ -69,20 +70,23 @@
                (append args cardano-cli-network-args))))
     (cardano-log 'debug "%s %s" cardano-cli-command (mapconcat #'prin1-to-string cmd " "))
     (with-temp-buffer
-      (let ((result
-             (apply #'call-process cardano-cli-command nil (current-buffer) nil
-                    cmd)))
-        (if (= result 0)
-            (string-trim (buffer-string))
-          (goto-char (point-min))
-          (when (re-search-forward "Usage:" nil 'end)
-            (backward-sentence))
-          (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
-            (cardano-log 'error err-msg)
-            (error err-msg)))))))
+      (cardano-cli-reply
+       (apply #'call-process cardano-cli-command nil (current-buffer) nil
+              cmd)))))
+
+(defun cardano-cli-reply (result)
+  "Process the RESULT value from an external process and the `current-buffer'."
+  (if (= result 0)
+      (string-trim (buffer-string))
+    (goto-char (point-min))
+    (when (re-search-forward "Usage:" nil 'end)
+      (backward-sentence))
+    (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
+      (cardano-log 'error err-msg)
+      (error err-msg))))
 
 (defun cardano-cli-pretty-yaml-message (obj)
-  "Encode OBJ into yaml and display on mini buffer."
+  "Encode OBJ into yaml and display on mini-buffer."
   (with-temp-buffer
     (yaml-mode)
     (thread-first obj
