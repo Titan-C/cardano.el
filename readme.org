@@ -487,6 +487,20 @@ generate the staking key.
 
 After creating you keys along your desired derivation path use
 =cardano-address-populate= to fill up your address list.
+* Developer tools
+The file =guix.scm= provides a specification on all the package dependencies.
+Binaries from IOHK as well as the emacs dependencies.
+
+You can install this package with:
+#+begin_src bash
+guix package -f guix.scm
+#+end_src
+
+Or you can enter a developer container with all necessary dependencies using:
+#+begin_src bash
+guix shell -D -f guix.scm -C
+#+end_src
+
 * Extra info
 This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
