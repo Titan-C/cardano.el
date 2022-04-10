@@ -169,14 +169,8 @@ If JSON-DATA default to post unless METHOD is defined."
                           "Payment" #'cardano-wallet-tx-new
                           "Get addresses" #'cardano-wallet-addresses
                           "Get transaction log" #'cardano-wallet-tx-log
-                          "Describe wallet" #'cardano-wallet-describe
+                          "Describe wallet" #'cardano-wallet-show
                           "Delete wallet" #'cardano-wallet-delete))))))
-
-(defun cardano-wallet-describe (wallet)
-  "Pop buffer describing WALLET."
-  (cardano-wallet
-   (format "wallets/%s/" (cardano-utils-get-in wallet "id"))
-   #'cardano-wallet-show))
 
 (defun cardano-wallet-addresses (wallet)
   "Pop buffer with addresses for WALLET."

@@ -487,9 +487,38 @@ generate the staking key.
 
 After creating you keys along your desired derivation path use
 =cardano-address-populate= to fill up your address list.
+** Full wallet integration
+The previous sections are low-level, high-power interfaces for the =cardano-cli=
+and =cardano-addresses=. However, most of the time you just need a simple wallet
+to spend your ADA and keep track of that transaction history. To achieve that
+goal, this tool also integrates with [[https://github.com/input-output-hk/cardano-wallet][cardano-wallet]] the middleware server that
+sits between your =cardano-node= and the =Daedalus= frontend.
+
+You need to install =cardano-wallet= and run that server together with your
+=cardano-node=. To load and configure this integration you can follow this:
+#+begin_src emacs-lisp
+(use-package cardano-wallet
+  :commands (cardano-wallet-balances cardano-wallet-helm-pick)
+  :load-path "/path/to/this/repository"
+  :config (setq cardano-wallet-url "http://localhost:8090"))
+#+end_src
+
+The entry point is the interactive function =cardano-wallet-balances=, which
+opens a buffer with a table showing the balances of all your registered wallets.
+To register a wallet call =cardano-wallet-create=, it will ask for the name of
+the wallet, a file containing the seed phrase(use the previous section for
+that), and a password to lock up your wallet. Once registered =cardano-wallet=
+will scan the blockchain for transactions pertaining your wallet, that takes a
+fair amount of time the first time, then it stays in watch mode and keeps
+synchronizing with the latest state of the blockchain.
+
+=cardano-wallet-helm-pick= is the entry point to work with each of your wallets
+individually. Its menu lets start a payment transaction, list all addresses,
+look at the transaction history, and show a description of the wallet.
+
 * Developer tools
 The file =guix.scm= provides a specification on all the package dependencies.
-Binaries from IOHK as well as the emacs dependencies.
+Binaries from IOHK as well as the Emacs dependencies.
 
 You can install this package with:
 #+begin_src bash
