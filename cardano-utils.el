@@ -27,9 +27,14 @@
 ;;
 ;;; Code:
 
+(require 'url)
 (require 'subr-x)
 (require 'dash)
 (require 'helm)
+(require 'cardano-log)
+
+;; Silence byte-compiler.
+(defvar url-http-end-of-headers)
 
 (defun cardano-utils-nw-p (s)
   "Trimmed not white-space string S."
@@ -77,6 +82,20 @@ REPLACER is optionally a function to replace the keys."
                     (cl-map 'vector (lambda (it) (cardano-utils-alist-key-string it replacer)) rest))
                    (t rest))))
           alist))
+
+(defun cardano-utils--parse-response (status callback)
+  "Parse response and log failure STATUS.
+
+CALLBACK processes the response."
+  (goto-char url-http-end-of-headers)
+  (let ((response (if (cardano-utils-nw-p
+                       (buffer-substring (point) (point-max)))
+                      (json-parse-buffer))))
+    (if-let ((error-status (plist-get status :error)))
+        (let ((err-message (cardano-utils-get-in response "message")))
+          (cardano-log 'error "Request status: %S %s" error-status err-message)
+          (error err-message))
+      (funcall callback response))))
 
 (provide 'cardano-utils)
 ;;; cardano-utils.el ends here

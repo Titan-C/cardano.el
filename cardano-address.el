@@ -65,7 +65,9 @@
   "Wallet list for easier selection."
   (mapcar (-lambda ((addr . path))
             (cons (concat (cardano-address--short addr)
-                          (concat " # " (file-name-base path)))
+                          (concat " # " (if (string-suffix-p "vkey" path)
+                                            (file-name-base path)
+                                          path)))
                   addr))
           (cardano-address--list)))
 
@@ -232,7 +234,7 @@ NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet."
                            reward-hash
                            nil))))
 
-;; HD wallets - wrapping cardano-addresses cli
+;;; HD wallets - wrapping cardano-addresses cli
 
 (defcustom cardano-address-command (executable-find "cardano-address")
   "Which `cardano-address' binary to use."

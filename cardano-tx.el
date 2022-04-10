@@ -125,7 +125,7 @@ All the wallet address-file pairs in the keyring are tested."
 
     (-> (--keep (-some->> (cardano-utils-get-in utxos it 'address)
                   (cardano-utils-get-in wallets)
-                  (replace-regexp-in-string "\\(-enterprise\\)?\\.addr$" ".skey"))
+                  (replace-regexp-in-string ".vkey$" ".skey"))
                 utxos-used)
         (append witness-override)
         (delete-dups))))

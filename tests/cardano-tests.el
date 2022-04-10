@@ -19,6 +19,7 @@
 (require 'cardano-assets)
 (require 'cardano-tx)
 (require 'cardano-utils)
+(require 'cardano-wallet)
 (require 'ert)
 
 (ert-deftest test-parse-token-bundle ()
@@ -145,6 +146,28 @@
            '("--mint" "5 D.54574f+5 B.54574f+2 D.4f4e45+2 B.4f4e45"
              (("--mint-script-file" "file")
               ("--mint-script-file" "secd"))))))
+
+(ert-deftest test-wallet-spend ()
+  (should (equal (cardano-wallet-payment
+                  '(("address" . "addr_test1qz")
+                    ("amount" ("lovelace" . 156548316)
+                     ("hocu" ("" . 16) ("sauo" . 5))
+                     ("mito" ("" . 56) ("pul" . 7)))))
+                 '(:address  "addr_test1qz"
+                   :amount (:quantity 156548316
+                            :unit  "lovelace")
+                   :assets  [(:policy_id "hocu"
+                              :asset_name ""
+                              :quantity 16)
+                             (:policy_id "hocu"
+                              :asset_name "7361756f"
+                              :quantity 5)
+                             (:policy_id "mito"
+                              :asset_name ""
+                              :quantity 56)
+                             (:policy_id "mito"
+                              :asset_name "70756c"
+                              :quantity 7)]))))
 
 (provide 'cardano-tests)
 ;;; cardano-tests.el ends here
