@@ -58,7 +58,8 @@
     (setq cardano-tx--utxos-list (cardano-tx-utxos (mapcar #'car (cardano-address--list))))))
 
 (defvar-local cardano-tx--buffer nil
-  "Buffer containing the transaction specification. This is only available on TX preview buffers.")
+  "Buffer containing the transaction specification.
+This is only available on TX preview buffers.")
 
 (defun cardano-tx-rewards (address)
   "Recover the rewards info sitting at ADDRESS."
@@ -107,10 +108,10 @@
 (defun cardano-tx-helm-utxos ()
   "Pick from wallet controlled utxos and put them on kill ring."
   (interactive)
-  (kill-new
-   (mapconcat #'car
-              (cardano-utils-pick "Select UTXOS" (cardano-tx-utxos-for-helm (cardano-tx--utxos-list)))
-              "\n  - utxo: ")))
+  (--> (cardano-tx-utxos-for-helm (cardano-tx--utxos-list))
+       (cardano-utils-pick "Select UTXOS" it)
+       (mapconcat #'car it "\n  - utxo: ")
+       (kill-new it)))
 
 (defun cardano-tx-witnesses (input-data)
   "Given the INPUT-DATA about to be spent.  Which wallets control them?
