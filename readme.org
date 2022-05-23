@@ -1,32 +1,21 @@
 #+TITLE: Cardano transaction editor
-
-This project is a running experiment and in Alpha stage. Don't rely on any of
-its functions or interfaces to be stable, because I'm still testing this user
-interface. Feedback is highly welcomed.
-
-Warning aside, myself and other Cardano users believe this is an awesome way to
-interact with the Cardano blockchain, it frees you from the cumbersome CLI  by
-offering you a declarative way to specify your transactions, without loosing
-fine grain control.
-
-This project has received support from the Cardano community, it is a Catalyst
-Fund 7 funded project and a Plutus Pioneer Capstone challenge prize winner.
-
 * Motivation
+Interaction with the Cardano blockchain happens through transactions. Your
+wallet software takes care of the common user tasks, yet for advanced endeavors
+your need the =cardano-cli= which gets really cumbersome as transactions grow in
+complexity. Bash scripts tame the problem for a while, because Bash scripts
+automate repetitive tasks at the cost of flexibility. Yet, they are no solution,
+because you remain bound to the one dimensionality of the command line.  Despite
+editing those scripts on an editor you must mark line breaks, and keep track of
+quoting your variables and input.
+
 The command line is a great tool, yet if I ever write more than 4 words on the
 command line I go crazy. The command line is, for me, a tool for quick queries
-not a work environment.
-
-Interacting with the Cardano blockchain happens through transactions. Creating a
-transaction with the CLI gets really cumbersome as the transaction grows in
-complexity and bash scripts just tame the problem for a while. Bash scripts
-automate repetitive tasks at the cost of flexibility. Bash scripts are no
-solution, because you are still bound by the one dimensionality of the command
-line. Despite editing those scripts on an editor you must mark line breaks, and
-keep track of quoting your variables and input.
+not a work environment. Bash scripts are good to automate simple things and keep
+dependencies low, however I also go crazy when maintaining large bash scripts.
 
 I want a tool that lets me craft my transactions, a powerful tool to interact
-with the cardano-node, which has all the features, does not get cumbersome as
+with the =cardano-node=, which has all the features, does not get cumbersome as
 you increase the complexity of your tasks, and empowers you as a user.
 
 I couldn't find such a tool, thus I started building it myself. A text editable
@@ -44,15 +33,28 @@ workflow:
 | Token minting         | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
 | Stake delegation      | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
 
-The videos are a show case of this project, yet as this project develops not
-they naturally become obsolete. The documentation bellow is an up to date
-reference.
+The videos are a show case of this project, yet as this project develops
+further, they naturally become obsolete. The documentation bellow is an up to
+date reference.
+
+* Word of caution
+This project is a running experiment and in Alpha stage. Don't rely on any of
+its functions or interfaces to be stable, because I'm still testing its user
+interface. Feedback is highly welcomed.
+
+Warning aside, myself and other Cardano users believe this is an awesome way to
+interact with the Cardano blockchain, it frees you from the cumbersome CLI by
+offering you a declarative way to specify your transactions, without loosing
+fine grain control.
+
+This project has received support from the Cardano community, it is a Catalyst
+Fund 7 funded project and a Plutus Pioneer Capstone challenge prize winner.
 
 * Installation
 This project is not yet on MELPA, you must install it yourself and deal with all
 dependencies as well.
 ** Dependencies
-*** Cardano Node 1.33
+*** Cardano Node 1.34.1
 You need a running Cardano node you can connect to.
 
 The easiest way to get one setup for the public testnet is using this repository:
@@ -60,8 +62,14 @@ https://github.com/input-output-hk/testnet-summit-scripts
 
 For Mainnet follow the standard guide
 https://docs.cardano.org/getting-started/installing-the-cardano-node
+**** Cardano-Addresses
+It manages the key generation for HD wallets
+**** Cardano-Wallet (Optional)
+This package is the backend for Daedalus. It is another service that needs
+to run in the background, with it you have access to rich wallet
+functionalities.
 
-*** Emacs
+*** Emacs 28
 This is the latest release. Install it and also the following packages.
 
 **** Required packages
@@ -71,6 +79,7 @@ This is the latest release. Install it and also the following packages.
 - yaml-mode
 - yasnippet
 - helm
+- emacsql-sqlite3
 
 *** This package itself
 Clone this repository and make sure it is in your =EMACSLOADPATH=, then evaluate
@@ -80,12 +89,28 @@ the file =cardano-tx.el=.  If you use =use-package= you can use this.
   :commands (cardano-tx-new cardano-cli-tip)
   :load-path "/path/to/this/repository")
 #+end_src
+** Using the Guix package manager
+The file =guix.scm= provides a specification on all the package dependencies.
+Binaries from IOHK as well as the Emacs dependencies.
+
+You can install this package with:
+#+begin_src bash
+guix package -f guix.scm
+#+end_src
+
+Or you can enter a developer container with all necessary dependencies using:
+#+begin_src bash
+guix shell -D -f guix.scm -C
+#+end_src
+
 * Configuration
 There are some variables you need to configure.
 
 #+begin_src emacs-lisp
 ;; Path to cli tool
 (setq cardano-cli-command "/full/path/to/the/cardano-cli")
+;; Path to cardano-address binary
+(setq cardano-address-command (executable-find "cardano-address"))
 ;; Path to the running node socket
 (setq cardano-cli-node-socket "/full/path/to/the/testnet/socket")
 ;; These are the network arguments for the testnet
@@ -93,14 +118,33 @@ There are some variables you need to configure.
 ;; When connecting to mainnet use
 ;; (setq cardano-cli-network-args '("--mainnet"))
 
-;; This directory will store all your key pairs (verification & signinig) and
-;; the addresses generated with those keys. It also holds your staking
-;; key. BE sure this folder exists, It will not be created by this tool
-;; Mind also to use separate directories for mainnet and testnets
-(setq cardano-address-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
+;; This directory stores all your key pairs (verification & signing), it is your
+;; wallet. It also holds your staking key. Make sure this folder exists, as this
+;; tool will not create it. For wallet hygiene use separate directories for
+;; mainnet and testnets. It also holds an SQLite database to administer known data.
+(setq cardano-db-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
 ;; In case you want to log the CLI commands used
 (setq cardano-log-level 'debug)
 #+end_src
+** Cardano-Wallet (optional)
+Although this package focuses on the low-level, high power interfaces for the
+=cardano-cli= and =cardano-addresses=, most of the time you just need a simple
+wallet to spend your ADA and keep track of that transaction history. To achieve
+that goal, this tool also integrates with [[https://github.com/input-output-hk/cardano-wallet][cardano-wallet]] the middleware server
+that sits between your =cardano-node= and the =Daedalus= frontend.
+
+=cardano-wallet= needs its own configuration to run the server that connects to
+your node and provides a local REST API to manage your wallet. Once you have
+configured it as specified on the [[https://github.com/input-output-hk/cardano-wallet#how-to-install-linux--windows--mac-os][official documentation]], you only need to
+load the package and specify the API endpoint. Using =use-package= for example:
+#+begin_src emacs-lisp
+(use-package cardano-wallet
+  :commands (cardano-wallet-balances cardano-wallet-helm-pick)
+  :load-path "/path/to/this/repository"
+  :config
+  (setq cardano-wallet-url "http://localhost:8090"))
+#+end_src
+
 * Usage
 Start by interactively querying the tip of the Blockchain. Use: =M-x
 cardano-cli-tip=, you should see at the bottom of the screen on the mini-buffer
@@ -115,53 +159,117 @@ block: 2941331
 era: Alonzo
 syncProgress: 100.00
 #+end_src
-** Creating new key pairs and addresses
+** Create key pairs and manage addresses
 *** Bag of keys
 To create new keys and their address use: =M-x cardano-address-new-key-files=.
 It will prompt you how to name your new keys in your wallet. Type a name or many
 space separated names. This will populate the directory you defined in
-=cardano-address-keyring-dir=, with the keys.
+=cardano-db-keyring-dir=, with the keys.
 
 This means:
 #+begin_src emacs-lisp
 M-x cardano-address-new-key-files RET first second third RET
 #+end_src
-will generated the following folder structure
+will generated the following folder structure:
 
 #+begin_src bash
 ~/cardano-wallet-keys/
+├── cardano.db
 ├── first.skey
 ├── first.vkey
 ├── second.skey
 ├── second.vkey
+├── stake.skey
+├── stake.vkey
 ├── third.skey
 └── third.vkey
 #+end_src
 
-Please keep in mind, that all keys are plain text files on your system. Thus
-when working with "mainnet" ADA, make sure you take the necessary precautions to
-secure your files, work on air gapped machine.
+In the background it will create you default reward(staking) key and
+interactively ask you whether to create addresses with your new key files using
+that reward key or not. The addresses information and the keys are stored in the
+SQLite database =cardano.db=.
+#+begin_quote
+*⚠ WARNING:* Please keep in mind, that all keys are plain text files on your
+system. Thus, when working with "mainnet" ADA, make sure you take the necessary
+precautions to secure your files, work on an air gapped machine.
+#+end_quote
 
-Simultaneously it will populate the variable =cardano-address--list=, with the
-matching address for each of those keys. At this stake all those address are not linked to a reward address. To create a staking key use the command:
+To create a staking key (under the name =stake2=) use the ELisp command:
 #+begin_src emacs-lisp
-(cardano-address-new-key "stake" t)
+(cardano-address-new-key "stake2" t)
 #+end_src
 
-The name =stake= is a conventionally privileged name. That key will generates
-the reward account when creating the addresses. Once you have that key, use the
-function =cardano-address-populate= to update your address list to have
-addresses with staking reward account.
+The name =stake= is the default name for the reward key, and created
+automatically. After creating additional reward keys, which you want to use in
+you addresses use =cardano-address-load=, select the spending key type, confirm
+whether to watch the new address and which reward key you want to use. All key
+file and addresses are stored in the SQLite database in the =cardano.db= file.
 
-Now, go ahead and fund any of your addresses
+The command =cardano-db-addresses= opens a table view of all your know addresses.
+The keyboard shortcut =c= copies the address in the row your point is. =w=
+toggles whether that address is watched in your UTxO set. =a= lets you write a
+comment for that particular address.
+
+*** Hierarchical Deterministic Wallets :optional:
+You can also install [[https://github.com/input-output-hk/cardano-addresses][cardano-addresses]] and let this tool help you manage your
+keys following the CIP-3 specification, and CIP-11.
+
+The function =cardano-address-gen-recovery-phrase= will assist you creating a
+mnemonic seed recovery phrase and save it on your =cardano-address-keyring=.
+
+#+begin_quote
+*⚠ WARNING:* Please keep in mind, that all keys and recovery phrases are plain
+text files on your system. Thus when working with "mainnet" ADA, make sure you
+take the necessary precautions to secure your files, work on air gapped machine.
+#+end_quote
+
+The function =cardano-address-new-hd-key-files= prompts for a derivation path
+for your key, you can still call this with many space separated paths. Following
+CIP-11 the path =1852H/1815H/0H/2/0= will generate the staking key.
+*** Registering key files
+If you generated some key files previous to using cardano.el or from previous
+versions of it, before its use of a SQLite database you need to register those
+keys to the database. The easiest way is using =dired= to mark the files you
+want to register and the interactively calling =cardano-db-dired-load-files=.
+You can also register cardano native simple scripts (multisigs/timelocks) and
+Plutus script files.
+
+To visualize the files registered in the database call the interactive function
+=cardano-db-typed-files=. This open a table view of all registered files. You
+include annotations to each file. Annotations helps you identify in the future
+their content more than the filename. You can also open the files directly from
+this view.
+
+| Shortcut | Function                   | Description            |
+|----------+----------------------------+------------------------|
+| o        | =cardano-db-file-open=     | Open file              |
+| a        | =cardano-db-file-annotate= | Add a note to the file |
+
+*** Manage addresses
+=cardano-address-load= calculates addresses from registered files and load them
+on the address database. Call it after registering new files.
+
+To visualize addresses loaded into your database call =cardano-db-addresses=.
+This opens a view with all registered addresses. You can toggle which ones to
+actively watch(query UTxO balance), copy the address to the keyboard or edit the
+annotation.
+
+| shortcut | function                          |
+|----------+-----------------------------------|
+| w        | =cardano-db-address-toggle-watch= |
+| c        | =cardano-db-address-copy=         |
+| a        | =cardano-db-addrres-annotate=     |
+
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using
 the CLI commands when crafting of the transaction.
 
 To launch the editor call =M-x cardano-tx-new=. It will list all the UTxOs that
-you control on your wallet[fn:1]. Select one or many, you can still include more
-into your transaction during the edit process later on. A new buffer opens with
-the basic spending transaction template you can directly edit.
+you control on your wallet for you to spend. This might take a while as it is an
+expensive query for the =cardano-node= [fn:1]. Select one or many, you can still
+include more into your transaction during the edit process later on. A new
+buffer opens with the basic spending transaction template you can directly edit.
 
 *** Spending and sending funds to arbitrary addresses
 Have a look at the next annotated example. It is a larger than usual
@@ -208,13 +316,14 @@ Not only is it readable, you get the advantages of syntax highlight,
 indentation, auto-completion and many more editing tools from the editor. You
 can also write comments in between the lines, because yaml allows that. That is
 not possible within a bash script using long commands with line breaks, you only
-get to comment within blocks of instructions.
+get to comment around the blocks of instructions.
 
 When creating this transaction there are utility functions that help you with some input.
 For example:
+
 - =cardano-tx-helm-utxos= Pick from utxos that are in your wallet for easy input.
-- =cardano-address-pick= Pick from all your wallet addresses
-- =cardano-address-from-script= inputs a Plutus script and loads to the kill ring the script address
+- =cardano-address-pick= Pick from all your registered addresses
+- =cardano-tx-available-balance= Calculates, displays and loads to kill-ring the balance not yet committed to transaction outputs.
 
 The Plutus scripts we send funds in this transaction are
 =contracts/AlwaysSucceeds.plutus= and =contracts/list-in-range.plutus=. The
@@ -236,6 +345,29 @@ clipboard for you to look for it in your favorite explorer.
 This transaction has the id
 [[https://testnet.adatools.io/transactions/20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00][20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00]], and is on the
 Testnet.
+**** Change address and fee
+The editor uses in general the =build= command to craft the transaction, which
+requires a change address. Unfortunately, that change address only balances the
+transaction with lovelaces and is a required field. However, if your change is
+exactly zero lovelaces the transaction would still work(see
+https://github.com/input-output-hk/cardano-node/issues/3041). You can thus use
+than function =cardano-tx-available-balance= to balance the transaction and once
+you try to build it extract the minimum fee value from the error message. Then
+put that value as an extra field on the transaction description:
+#+begin_src yaml
+fee: 189432
+#+end_src
+
+Re-balance your transaction outputs and try again, the change address although
+required will not show up on the crafted transaction, and the fee field is only
+a help to balance the transaction, as the =build= command does not use it.
+
+Currently, it only makes sense to pay the minimum fee in Cardano. Yet, if it one
+day implements a market for fees, where a higher fee would help you get ahead on
+the mempool and prioritize your transaction you can set your fee. For that use
+the =fee= field, but delete the change address output. That will use the
+=build-raw= command where you specify the fee.
+
 *** Minting native tokens
 Minting tokens is again simple and doable with a single specification. Again,
 exemplifying with a rather large transaction, where I'll mint two kinds of
@@ -245,6 +377,8 @@ Additionally, the NFT metadata will include its metadata.
 Launch the editor with =M-x cardano-tx-new=, and pick some UTxOs to fund the
 mint transaction. It is a big transaction, don't get overwhelmed by the forest
 they are only trees. Follow the comments, a lot is going on in this transaction.
+To help you write the minting specification typing =mint= followed by =<TAB>=
+will use yasnippet to load minting template specification.
 
 #+begin_src yaml
 inputs:
@@ -345,7 +479,7 @@ Have a look at the transaction on an testnet explorer: [[https://testnet.adatool
 
 Notice that the token names are still described by human readable strings. The
 editor translates those names to hexadecimal values when creating the
-transaction as required by the cardano-node=1.33.
+transaction as required by the cardano-node>=1.33.
 
 *** Registering stake address and delegating to a stakepool
 The transaction to register and delegate at the same time looks like this:
@@ -471,77 +605,45 @@ find it on the testnet explorer.
 That's it. This tool reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
 the input, signing and submitting.
-** Hierarchical Deterministic Wallets
-You can also install [[https://github.com/input-output-hk/cardano-addresses][cardano-addresses]] and let this tool help you manage your
-keys following the CIP-3 specification, and CIP-11.
+*** Native simple scripts (multisigs/timelocks)
+The same scripts you used for minting policies are usable to secure funds. Those
+are simple multisig and timelock scripts. To create one of those scripts call
+the function =cardano-tx-new-script=. It will open an editor window where you
+can write the clauses of your script. The yasnippet shortcut =ns= expands into
+the clauses of a simple script. Simple scripts are recursive, thus you can go as
+deep as you want stating you spending clauses.
 
-The function =cardano-address-gen-recovery-phrase= will assist you creating a
-mnemonic seed recovery phrase and save it on your =cardano-address-keyring=.
-Please keep in mind, that all keys and recovery phrases are plain text files on
-your system. Thus when working with "mainnet" ADA, make sure you take the
-necessary precautions to secure your files, work on air gapped machine.
+Press =C-c C-c= to save the script. This will convert the script from it's YAML
+editing form to a JSON file and save it on your =cardano-db-keyring-dir= for
+later use using the script hash as file name. Please understand that after that
+step you should never modify that file. If you need a new script with slight
+variations, make a new script and it to the database and keep that copy.
 
-Using the function =cardano-address-new-hd-key-files= you'll be prompted for a
-derivation path for your key. Following CIP-11 the path =1852H/1815H/0/2/0= will
-generate the staking key.
+Visiting =cardano-db-typed-files= you can see the newly created script. I advise
+you to also write a description of it using the annotation feature. Later you
+can call =cardano-address-load= to calculate the address of this script and have it
+available for use.
 
-After creating you keys along your desired derivation path use
-=cardano-address-populate= to fill up your address list.
-** Full wallet integration
-The previous sections are low-level, high-power interfaces for the =cardano-cli=
-and =cardano-addresses=. However, most of the time you just need a simple wallet
-to spend your ADA and keep track of that transaction history. To achieve that
-goal, this tool also integrates with [[https://github.com/input-output-hk/cardano-wallet][cardano-wallet]] the middleware server that
-sits between your =cardano-node= and the =Daedalus= frontend.
-
-You need to install =cardano-wallet= and run that server together with your
-=cardano-node=. To load and configure this integration you can follow this:
-#+begin_src emacs-lisp
-(use-package cardano-wallet
-  :commands (cardano-wallet-balances cardano-wallet-helm-pick)
-  :load-path "/path/to/this/repository"
-  :config (setq cardano-wallet-url "http://localhost:8090"))
-#+end_src
-
-The entry point is the interactive function =cardano-wallet-balances=, which
-opens a buffer with a table showing the balances of all your registered wallets.
-To register a wallet call =cardano-wallet-create=, it will ask for the name of
-the wallet, a file containing the seed phrase(use the previous section for
-that), and a password to lock up your wallet. Once registered =cardano-wallet=
-will scan the blockchain for transactions pertaining your wallet, that takes a
-fair amount of time the first time, then it stays in watch mode and keeps
-synchronizing with the latest state of the blockchain.
+** Full wallet integration (Optional)
+If you installed the [[*Cardano-Wallet (optional)][cardano-wallet]] the main entry point is the interactive
+function =cardano-wallet-balances=, which opens a buffer with a table showing
+the balances of all your registered wallets.  To register a wallet call
+=cardano-wallet-create=, it will ask for the name of the wallet, a file
+containing the seed phrase(use the previous section for that), and a password to
+lock up your wallet. Once registered =cardano-wallet= will scan the blockchain
+for transactions pertaining your wallet, that takes a fair amount of time the
+first time, then it stays in watch mode and keeps synchronizing with the latest
+state of the blockchain.
 
 =cardano-wallet-helm-pick= is the entry point to work with each of your wallets
 individually. Its menu lets start a payment transaction, list all addresses,
 look at the transaction history, and show a description of the wallet.
-
-* Developer tools
-The file =guix.scm= provides a specification on all the package dependencies.
-Binaries from IOHK as well as the Emacs dependencies.
-
-You can install this package with:
-#+begin_src bash
-guix package -f guix.scm
-#+end_src
-
-Or you can enter a developer container with all necessary dependencies using:
-#+begin_src bash
-guix shell -D -f guix.scm -C
-#+end_src
 
 * Extra info
 This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
 some of the winners. I hope it raises awareness of this tool and also to call
 attention to my Catalyst proposal to fund the further development of this tool.
-
-Unfortunately, it did not receive enough community support for Fund 6. Yet, I'm
-releasing most of the work done in advance. I will re-apply on the next funding
-round.
-
-https://cardano.ideascale.com/a/dtd/Transaction-editor-to-replace-cli/370256-48088
-
 * Footnotes
 
 [fn:1] Finding the UTxOs takes a while and thus your editor blocks during that

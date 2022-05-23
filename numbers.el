@@ -32,7 +32,7 @@
 ;;; Code:
 
 (defgroup numbers nil
-  "Make unreadable big intergers readable."
+  "Make unreadable big integers readable."
   :group 'tools)
 
 (defcustom numbers-separator "_"
@@ -95,9 +95,7 @@ Consider current setting of user variables."
 
 (define-minor-mode numbers-separator-mode
   "Separate long numbers."
-  nil
-  " numsep"
-  nil
+  :lighter " numsep"
   (if numbers-separator-mode
       (jit-lock-register #'numbers-change)
     (jit-lock-unregister #'numbers-change)))

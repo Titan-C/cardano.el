@@ -27,11 +27,14 @@
 ;;
 ;;; Code:
 
-(require 'url)
-(require 'subr-x)
 (require 'dash)
 (require 'helm)
+(require 'json)
+(require 'subr-x)
+(require 'url)
+(require 'yaml)
 (require 'cardano-log)
+(require 'cbor)
 
 ;; Silence byte-compiler.
 (defvar url-http-end-of-headers)
@@ -79,7 +82,11 @@ REPLACER is optionally a function to replace the keys."
                    ((consp rest)
                     (cardano-utils-alist-key-string rest replacer))
                    ((vectorp rest)
-                    (cl-map 'vector (lambda (it) (cardano-utils-alist-key-string it replacer)) rest))
+                    (cl-map 'vector (lambda (it)
+                                      (if (consp it)
+                                          (cardano-utils-alist-key-string it replacer)
+                                        it))
+                            rest))
                    (t rest))))
           alist))
 
@@ -90,7 +97,7 @@ CALLBACK processes the response."
   (goto-char url-http-end-of-headers)
   (let ((response (if (cardano-utils-nw-p
                        (buffer-substring (point) (point-max)))
-                      (json-parse-buffer))))
+                      (json-read))))
     (if-let ((error-status (plist-get status :error)))
         (let ((err-message (cardano-utils-get-in response "message")))
           (cardano-log 'error "Request status: %S %s" error-status err-message)

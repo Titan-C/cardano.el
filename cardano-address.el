@@ -4,9 +4,9 @@
 ;;
 ;; Author: Óscar Nájera <https://oscarnajera.com>
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
+;; Version: 0.2.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "25.1"))
+;; Package-Requires: ((emacs "25.1") (f "0.20.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -35,6 +35,7 @@
 (require 'bech32)
 (require 'cbor)
 (require 'subr-x)
+(require 'cardano-db)
 (require 'cardano-utils)
 (require 'cardano-cli)
 (require 'cardano-log)
@@ -43,45 +44,30 @@
   "Address functionalities."
   :group 'cardano)
 
-(defcustom cardano-address-keyring-dir "~/cardano-wallet-keys"
-  "Folder where to store all the key files and addresses under management."
-  :type 'directory)
+(define-obsolete-variable-alias 'cardano-address-keyring-dir 'cardano-db-keyring-dir "0.2.0")
 
-(defvar cardano-address--list nil
-  "List all available wallet addresses in keyring.")
-
-(defun cardano-address-staking-key-file ()
-  "Return a staking key compatible file by name."
-  (car (directory-files cardano-address-keyring-dir t
-                        (rx (or "_2_0" "stake") ".vkey" eol))))
-
-(defun cardano-address--list ()
-  "Return the list of all managed addresses in keyring."
-  (if cardano-address--list
-      cardano-address--list
-    (cardano-address-populate)))
-
-(defun cardano-address-named ()
-  "Wallet list for easier selection."
-  (mapcar (-lambda ((addr . path))
-            (cons (concat (cardano-address--short addr)
-                          (concat " # " (if (string-suffix-p "vkey" path)
-                                            (file-name-base path)
-                                          path)))
-                  addr))
-          (cardano-address--list)))
+(defun cardano-address--short (address)
+  "Shorten ADDRESS for user display."
+  (replace-regexp-in-string
+   (rx (group "addr" (optional "_test") "1" (= 6 any)) (1+ any)
+       (group (= 6 any)) eol)
+   "\\1...\\2" address))
 
 (defun cardano-address-new-key (name &optional stake)
   "Create new payment keys under NAME.
 If STAKE is non-nil generate stake key."
-  (let* ((prefix (expand-file-name name cardano-address-keyring-dir))
+  (let* ((prefix (expand-file-name name cardano-db-keyring-dir))
          (type (if stake "stake-address" "address"))
          (v-file (concat prefix ".vkey"))
          (s-file (concat prefix ".skey")))
-    (cardano-cli
-     type "key-gen"
-     "--verification-key-file" v-file
-     "--signing-key-file" s-file)))
+    (if (or (file-exists-p v-file) (file-exists-p v-file))
+        (cardano-log 'warn "Skip creating %S key pair, because file-name already exists." name)
+      (cardano-cli
+       type "key-gen"
+       "--verification-key-file" v-file
+       "--signing-key-file" s-file)
+      (cardano-log 'info "Created new key pair: %S" name))
+    (list v-file s-file)))
 
 (defun cardano-address-new-key-files (&rest names)
   "Generate the key pairs for each one of NAMES.
@@ -89,30 +75,46 @@ Files are located in keyring dir together with matching address files."
   (interactive
    (split-string
     (read-string "How do you want to name your keys(separate with space for many): ")))
-  (let ((keys (mapcar #'file-name-base
-                      (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
-    (mapc
-     (lambda (name)
-       (if (member name keys)
-           (cardano-log 'warn "Skip creating %S key pair, because it already exists." name)
-         (cardano-address-new-key name)
-         (cardano-log 'info "Created new key pair: %S" name)))
-     names))
-  (cardano-address-populate)
+  (cardano-address-load-new-keys
+   (mapcan #'cardano-address-new-key names)))
+
+(defun cardano-address-load-new-keys (key-files)
+  "Load to database newly created KEY-FILES the create addresses."
+  (cardano-db-load-files key-files)
+  (cardano-address-load "PaymentVerificationKeyShelley_ed25519" t)
   (message "Keys created"))
 
-(defun cardano-address-populate ()
-  "Populate the cardano-address--list with all keys combined with STAKE-KEY."
-  (interactive)
-  (let ((stake-key (-some--> (cardano-address-staking-key-file)
-                     (when (file-exists-p it) it))))
-    (thread-last
-      (directory-files cardano-address-keyring-dir t "\\.vkey$")
-      (cl-remove-if (lambda (path) (string= stake-key path)))
-      (mapcar (lambda (key)
-                (cons (cardano-address-payment key stake-key)
-                      key)))
-      (setq cardano-address--list))))
+(defun cardano-address-stake-pick (&optional allow-none)
+  "Select from registed stake keys.
+ALLOW-NONE flag for when explicitly skiping a stake key."
+  (let ((named-keys (append (--map (cons (file-name-base (cadr it)) it) (cardano-db-stake-keys))
+                            (when allow-none '(("No Reward"))))))
+    (assoc (completing-read "Reward key: " named-keys) named-keys)))
+
+(defun cardano-address-load (spending-type monitor)
+  "Load and MONITOR addresses from all keys of SPENDING-TYPE.
+
+Interactively select stake-key to combined with."
+  (interactive
+   (list (completing-read "Which spending condition? "
+                          '("PaymentVerificationKeyShelley_ed25519"
+                            "SimpleScriptV2"
+                            "PlutusScriptV1")
+                          nil t)
+         (yes-or-no-p "Watch the created addresses?")))
+  (unless (cardano-db-stake-keys)
+    (cardano-db-load-files
+     (cardano-address-new-key "stake" t)))
+  (-let (((_name stake-id stake-key) (cardano-address-stake-pick t)))
+    (-some->> (cardano-db-files-of-type spending-type)
+      (mapcar (-lambda ((id payment-key))
+                (vector nil
+                        (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
+                            (cardano-address-payment payment-key stake-key)
+                          (cardano-address-from-script payment-key stake-key))
+                        id stake-id monitor (file-name-base payment-key))))
+      (emacsql (cardano-db)
+               [:insert-or-ignore :into addresses :values $v1]))))
 
 (defun cardano-address-payment (vkey-file &optional stake-key)
   "Calculate payment address for VKEY-FILE optionally using STAKE-KEY for rewards."
@@ -130,14 +132,11 @@ Files are located in keyring dir together with matching address files."
 (defun cardano-address-from-script (filename &optional stake-key-file)
   "Calculate the address of a script residing on FILENAME.
 Optionally with the STAKE-KEY-FILE."
-  (interactive
-   (list (read-file-name "Select Plutus script file: ")))
-  (kill-new
-   (apply #'cardano-cli
-          "address" "build"
-          "--payment-script-file" (expand-file-name filename)
-          (when stake-key-file
-            (list "--stake-verification-key-file" stake-key-file)))))
+  (apply #'cardano-cli
+         "address" "build"
+         "--payment-script-file" (expand-file-name filename)
+         (when stake-key-file
+           (list "--stake-verification-key-file" stake-key-file))))
 
 (defun cardano-address-stake-registration-cert (vkey-file &optional leave)
   "Write stake address registration certificate from VKEY-FILE.
@@ -147,27 +146,31 @@ If LEAVE deregister."
                    (_ "deregistration")))
          (stake-registration-cert-file (concat vkey-file "." action ".cert")))
     (cardano-cli "stake-address" (concat action "-certificate")
-                 "--stake-verification-key-file" vkey-file
+                 "--stake-verification-key-file" (expand-file-name vkey-file)
                  "--out-file" stake-registration-cert-file)
     stake-registration-cert-file))
 
-(defun cardano-address-delegation-certificate (pool-id &optional stake-vkey)
+(defun cardano-address-delegation-certificate (pool-id stake-vkey)
   "Create delegation certificate for POOL-ID.
 Optionally define the STAKE-VKEY file."
   (let ((delegation-cert-file (make-temp-file "delegation" nil ".cert")))
     (cardano-cli "stake-address" "delegation-certificate"
-                 "--stake-verification-key-file"
-                 (or stake-vkey (cardano-address-staking-key-file))
+                 "--stake-verification-key-file" (expand-file-name stake-vkey)
                  "--stake-pool-id" pool-id
                  "--out-file" delegation-cert-file)
     delegation-cert-file))
 
-(defun cardano-address--short (address)
-  "Shorten ADDRESS for user display."
-  (replace-regexp-in-string
-   (rx (group "addr" (optional "_test") "1" (= 6 any)) (1+ any)
-       (group (= 6 any)) eol)
-   "\\1...\\2" address))
+(defun cardano-address-named ()
+  "Wallet list for easier selection."
+  (->> (emacsql (cardano-db)
+                [:select [raw path] :from addresses
+                 :left-join typed-files :on (= spend-key typed-files:id)])
+       (mapcar (-lambda ((addr path))
+                 (cons (concat (cardano-address--short addr)
+                               (concat " # " (if (string-suffix-p "vkey" path)
+                                                 (file-name-base path)
+                                               path)))
+                       addr)))))
 
 (defun cardano-address-pick ()
   "Let the user select an address from currently managed ones."
@@ -180,14 +183,12 @@ Optionally define the STAKE-VKEY file."
 (defun cardano-address-key-hash (vkey-file)
   "Get the key hash out of the VKEY-FILE."
   (interactive
-   (list (read-file-name "Select verification key file: " cardano-address-keyring-dir
+   (list (read-file-name "Select verification key file: " cardano-db-keyring-dir
                          nil nil nil (lambda (n) (string-suffix-p ".vkey" n)))))
   (kill-new
-   (concat
-    (if (string= (cardano-address-staking-key-file) vkey-file)
-        (cardano-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
-      (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))
-    " # " (file-name-base vkey-file ))))
+   (if (string= (cadar (cardano-db-stake-keys)) vkey-file)
+       (cardano-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
+     (cardano-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))))
 
 (defun cardano-address-decode (address)
   "Decode ADDRESS string into its representation."
@@ -245,17 +246,18 @@ NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet."
   "KEY-PATH is list of path symbols on numbers.
 Return joined string by SEPARATOR, defaults to `/'."
   (replace-regexp-in-string
-   (or "h" "'") "H"
+   "h" "H"
    (mapconcat #'prin1-to-string key-path (or separator "/"))))
 
 (defun cardano-address--validate-hd-path (path)
-  "Validate HD derivation PATH."
+  "Validate HD derivation PATH and return it normalized.
+PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
   (let ((split-path
          (--> (cond
                ((consp path) (cardano-address-path->str path))
-               ((stringp path) path)
+               ((stringp path) (replace-regexp-in-string (rx (or "h" "'")) "H" path))
                (t ""))
-              (split-string it (rx (or whitespace "/")))
+              (split-string it (rx (or whitespace "/" "_")))
               (cl-remove-if-not #'cardano-utils-nw-p it))))
     (when (--every (string-match-p (rx bol (1+ digit) (optional "H") eol) it) split-path)
       (mapcar
@@ -267,20 +269,20 @@ Return joined string by SEPARATOR, defaults to `/'."
 
 (defun cardano-address-gen-recovery-phrase (size)
   "Create the recovery phrase of SIZE words for HD wallet.
-Save it unencrypted on `cardano-address-keyring-dir'."
+Save it unencrypted on `cardano-db-keyring-dir'."
   (interactive
    (list
     (completing-read "How long shal the recovery phrase be? "
                      (mapcar #'number-to-string (number-sequence 9 24 3))
                      nil t)))
-  (let ((phrase-file (expand-file-name "phrase.prv" cardano-address-keyring-dir)))
+  (let ((phrase-file (expand-file-name "phrase.prv" cardano-db-keyring-dir)))
     (if (file-exists-p phrase-file)
         (cardano-log 'warn "There is already a recovery phrase file on your keyring")
       (with-temp-file phrase-file
-          (cardano-cli-reply
-           (call-process cardano-address-command nil (current-buffer) nil
-                         "recovery-phrase" "generate"
-                         "--size" (if (numberp size) (number-to-string size) size))))
+        (cardano-cli-reply
+         (call-process cardano-address-command nil (current-buffer) nil
+                       "recovery-phrase" "generate"
+                       "--size" (if (numberp size) (number-to-string size) size))))
       (set-file-modes phrase-file #o600))))
 
 (defun cardano-address-piped (&rest args)
@@ -299,9 +301,8 @@ Save it unencrypted on `cardano-address-keyring-dir'."
 (defun cardano-address-derive-child (path)
   "Piped from buffer derive PATH from extended key."
   (cardano-address-piped "key" "child"
-                         (if (stringp path)
-                             path
-                           (cardano-address-path->str path))))
+                         (cardano-address-path->str
+                          (cardano-address--validate-hd-path path))))
 
 (defun cardano-address-public-key (&optional without-chain-code)
   "Piped from buffer extract the public key optionally WITHOUT-CHAIN-CODE."
@@ -332,51 +333,51 @@ Save it unencrypted on `cardano-address-keyring-dir'."
          :cborHex (-> pub-key cbor-string->hexstring
                       cbor<-elisp cbor-string->hexstring))))
 
-(defun cardano-address-cli-keys (out-file-name)
-  "Save `cardano-cli' key-pairs labeled by OUT-FILE-NAME.
+(defun cardano-address-cli-keys (file-name)
+  "Save `cardano-cli' key-pairs labeled by FILE-NAME.
 From extended key in `current-buffer'."
   (goto-char (point-min))
-  (let* ((stake-p (looking-at "stake"))
-         (type-name (if stake-p "Stake" "Payment"))
-         (xpriv-key
-          (-> (buffer-string) bech32-decode cadr))
-         (pub-key
-          (progn (cardano-address-public-key t)
-                 (-> (buffer-string) bech32-decode cadr))))
-    ;; Write secret signing key
-    (let ((out-file (concat out-file-name ".skey")))
-      (-> (cardano-address--json-priv-key xpriv-key pub-key type-name)
-          (f-write 'utf-8 out-file))
-      (set-file-modes out-file #o600))
-    ;; Write verification key
-    (let ((out-file (concat out-file-name".vkey")))
-      (-> (cardano-address--json-pub-key pub-key type-name)
-          (f-write 'utf-8 out-file))
-      (set-file-modes out-file #o600))))
+  (let ((type-name (if (looking-at "stake") "Stake" "Payment"))
+        (xpriv-key
+         (-> (buffer-string) bech32-decode cadr))
+        (pub-key
+         (progn (cardano-address-public-key t)
+                (-> (buffer-string) bech32-decode cadr)))
+        (out-file-name (expand-file-name file-name cardano-db-keyring-dir)))
+    (let ((s-file (concat out-file-name ".skey"))
+          (v-file (concat out-file-name".vkey")))
+      (if (or (file-exists-p v-file) (file-exists-p v-file))
+          (cardano-log 'warn "Skip creating %S key pair, because it already exists." file-name)
+        ;; Write secret signing key
+        (-> (cardano-address--json-priv-key xpriv-key pub-key type-name)
+            (f-write 'utf-8 s-file))
+        (set-file-modes s-file #o600)
+        ;; Write verification key
+        (-> (cardano-address--json-pub-key pub-key type-name)
+            (f-write 'utf-8 v-file))
+        (set-file-modes v-file #o600)
+        (cardano-log 'info "Created new key pair: %S" file-name))
+      (list v-file s-file))))
 
-(defun cardano-address-new-hd-key (path)
-  "Create new HD key-pair at PATH from wallet recovery phrase."
+(defun cardano-address-new-hd-key (named-path)
+  "Create new HD key-pair at NAMED-PATH from wallet recovery phrase."
   (with-temp-buffer
     (insert-file-contents
-     (expand-file-name "phrase.prv" cardano-address-keyring-dir))
+     (expand-file-name "phrase.prv" cardano-db-keyring-dir))
     (cardano-address-master-key-from-phrase)
-    (cardano-address-derive-child path)
-    (cardano-address-cli-keys
-     (expand-file-name (cardano-address-path->str path "_")
-                       cardano-address-keyring-dir))))
+    (cardano-address-derive-child named-path)
+    (cardano-address-cli-keys named-path)))
 
-(defun cardano-address-new-hd-key-files (path)
-  "Generate the key pairs for HD derivation PATH."
+(defun cardano-address-new-hd-key-files (&rest paths)
+  "Generate the key pairs for HD derivation PATHS."
   (interactive
-   (list (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
-  (when-let ((path (cardano-address--validate-hd-path path))
-             (named-path (cardano-address-path->str path "_")))
-    (let ((keys (mapcar #'file-name-base
-                        (directory-files cardano-address-keyring-dir t "\\.vkey$"))))
-      (if (member named-path  keys)
-          (cardano-log 'warn "Skip creating %S key pair, because it already exists." named-path)
-        (cardano-address-new-hd-key path)
-        (cardano-log 'info "Created new key pair: %S" named-path)))))
+   (split-string (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
+  (cardano-address-load-new-keys
+   (mapcan (lambda (path)
+             (when-let ((path (cardano-address--validate-hd-path path))
+                        (named-path (cardano-address-path->str path "_")))
+               (cardano-address-new-hd-key named-path)))
+           paths)))
 
 (provide 'cardano-address)
 ;;; cardano-address.el ends here

@@ -103,9 +103,9 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
   (let ((data-5-bit (bech32-tobase32 data))
         (dc-hrp (downcase hrp)))
     (thread-last (append data-5-bit (bech32-create-checksum dc-hrp data-5-bit))
-      (mapcar (lambda (v) (elt bech32-charset v)))
-      concat
-      (concat dc-hrp "1"))))
+                 (mapcar (lambda (v) (elt bech32-charset v)))
+                 concat
+                 (concat dc-hrp "1"))))
 
 (defun bech32-decode (bech32string)
   "Decode a BECH32STRING into HRP and data."

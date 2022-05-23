@@ -3,12 +3,12 @@
 # expand-env: ((yas-indent-line 'fixed))
 # --
 inputs:
-  - utxo: `(cardano-tx-helm-utxos)`
+  - utxo: `(cardano-tx-helm-utxos t)`
 
 outputs:
-  - address:  $1
+  - address:  $0
     amount:
-      lovelace:  $0
+      lovelace: 0
   # ALWAYS think about your change address
   - address:  `(cardano-address-pick)`
     change: true

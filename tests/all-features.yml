@@ -1,0 +1,54 @@
+# -*- mode: cardano-tx; -*-
+
+inputs:
+  - utxo: 8ecc6e1276b29f83023e0ead1f199727d6987d88cab60ff3fd9a164f4c408b2d#0
+  - utxo: b91d2c45d50258ff1172e6943e0fba0ebef60839749ebf970fdd3f3077795ece#0
+  - utxo: 010bfe8a5d424b6c8fde7b4dd212dbdd521edb695b9362b38ca7583cdc415c2f#1
+    script-file: /tmp/AlwaysSucceeds.plutus
+    datumfile: /tmp/datum-nu46JN.json
+    redeemer: Mine
+
+withdrawals:
+  - address: stake_test1upm98yt2h04p386u7sdsz5entjf6dw38u2kc7fkvxy9z82s5f2lrh
+    amount:
+      lovelace: 1566186
+
+certificates:
+  - delegation:
+      pool: pool1ucmm6rgdta0sw4qrcj3vml4wsr8pld495pptuypxg2uuvvlqest
+      vkey-file: ./test-stake.vkey
+  - registration:
+      vkey-file: ./test-stake.vkey
+  - registration:
+
+outputs:
+  - address:  addr_test1qrhnl8q4hs8wunc0n5768nt0rt2pmpun797cs8c5vlk6fpmr0zpd4jlrt6v92ak0e9rl4xglv0qadmhjpfe2ade0pz4qhq2ufk # 0H/0/7: unused
+    amount:
+      lovelace: 1565165
+      MYTOK:
+        aa: 1
+      ac1eb8870807125c83e2629d4e833f6e658c70eff57be83fde97f632:
+        paz: 3
+  # ALWAYS think about your change address
+  - address:  addr_test1qpn5cyd573vpmf2kcna8m50f4753r84qy5x3d2ecep657ymr0zpd4jlrt6v92ak0e9rl4xglv0qadmhjpfe2ade0pz4qx2vl7y # 0H/0/8: unused
+    change: true
+
+mint:
+  MYTOK:
+    policy:
+      type: all
+      scripts:
+        - type: sig
+          keyHash: 60974075c8249cd4bb695c19903174299da6a28db460750cd9cef122 # first
+        - type: before
+          slot: 46562123 # One hour from current slot
+    assets:
+      aa:  1
+
+witness:
+  - first
+
+# For Mary NFTs don't forget to match the validity interval
+validity-interval:
+  invalid-hereafter: 46562123
+  invalid-before: 18384313

@@ -1,6 +1,7 @@
 (use-modules (guix)
              (gnu packages linux)
              (gnu packages version-control)
+             (gnu packages emacs)
              (gnu packages emacs-xyz)
              (guix build-system emacs)
              (guix build-system copy)
@@ -8,17 +9,18 @@
              (guix licenses))
 
 (define %source-dir (dirname (current-filename)))
+(display %source-dir)
 
-(define cardano-wallet
+(define-public cardano-wallet
   (package
    (name "cardano-wallet")
-   (version "2022-01-18")
+   (version "2022-04-27")
    (source (origin
             (method url-fetch)
-            (uri "https://hydra.iohk.io/build/11906483/download/1/cardano-wallet-v2022-01-18-linux64.tar.gz")
+            (uri "https://hydra.iohk.io/build/14067440/download/1/cardano-wallet-v2022-04-27-linux64.tar.gz")
             (sha256
              (base32
-              "1gwgchh0n5h6qpqkaww5hx27wdddd6ips2r5vmqqc4r7myam68gs"))))
+              "0isdk01iwr0zcm7nzrhv94rwf4dy4m36m2rgyywg05vc2q69yggh"))))
    (build-system copy-build-system)
    (arguments
     '(#:install-plan
@@ -37,11 +39,14 @@
                        #:recursive? #t
                        #:select? (git-predicate %source-dir)))
    (build-system emacs-build-system)
+   (native-inputs
+    (list util-linux git emacs))
    (inputs
     (list cardano-wallet))
    (propagated-inputs
     (list emacs-dash emacs-yaml-mode emacs-yaml
-          emacs-yasnippet emacs-helm emacs-f))
+          emacs-yasnippet emacs-helm emacs-f
+          emacs-emacsql emacs-emacsql-sqlite3))
    (home-page "https://github.com/Titan-C/cardano.el")
    (synopsis "An emacs interface to Cardano")
    (description "Wrapping Cardano cli tools")

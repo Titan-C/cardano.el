@@ -55,15 +55,25 @@ Token names are now hex encoded-make them readable."
   (cond
    ((numberp value) (format "lovelace: %d" value))
    ;;starting on Mary
-   ((stringp (car value)) (format "%s: %s" (car value)
-                                  (let ((tokens (cdr value)))
-                                    (if (numberp tokens)
-                                        tokens
-                                      (thread-last (cardano-assets-parse-token-bundle tokens)
-                                        cardano-assets-format-tokens
-                                        (replace-regexp-in-string "^" "  ")
-                                        (concat "\n"))))))
+   ((stringp (car value))
+    (if (numberp (cdr value))
+        (format "%S: %d" (if (string= 'lovelace (car value)) 'lovelace (car value)) (cdr value))
+      (thread-last (cardano-assets-parse-token-bundle (cdr value))
+                   (cardano-assets-format-tokens)
+                   (replace-regexp-in-string "^" "  ")
+                   (concat (car value) ":\n" ))))
    (t (mapconcat #'cardano-assets-format-tokens value "\n"))))
+
+(defun cardano-assets-hexify (value)
+  "Convert asset names in output VALUE to hex strings."
+  (mapcar (-lambda ((asset . quantity))
+            (if (string= asset 'lovelace)
+                (cons asset quantity)
+              (cons asset
+                    (mapcar (-lambda ((tokenname . amount))
+                              (cons (cbor-string->hexstring tokenname) amount))
+                            quantity))))
+          value))
 
 (defun cardano-assets-flatten (value)
   "Return the flat list representation of VALUE."
@@ -77,17 +87,21 @@ Token names are now hex encoded-make them readable."
                  value)))
 
 (defun cardano-assets-merge-alists (function alist1 alist2)
-  "Merge ALIST1 with ALIST2 using FUNCTION."
+  "Merge ALIST1 with ALIST2 using FUNCTION.
+This assumes FUNCTION will be applied to a pair of numbers."
   (cl-flet ((keys (alist) (mapcar #'car alist)))
-    (cl-loop with keys = (cl-union (keys alist1) (keys alist2) :test 'equal)
-             for k in keys collect
-             (let ((l-one (alist-get k alist1 nil nil #'string=))
-                   (l-two (alist-get k alist2 nil nil #'string=)))
-               (cons k (cond ((and (numberp l-one) (numberp l-two))
-                              (funcall function l-one l-two))
-                             ((and (numberp l-one) (null l-two)) l-one)
-                             ((and (numberp l-two) (null l-one)) l-two)
-                             (t (cardano-assets-merge-alists function l-one l-two))))))))
+    (mapcan (lambda (key)
+              (let* ((l-one (alist-get key alist1 nil nil #'string=))
+                     (l-two (alist-get key alist2 nil nil #'string=))
+                     (result (cond ((and (numberp l-one) (numberp l-two))
+                                    (funcall function l-one l-two))
+                                   ((and (numberp l-one) (null l-two)) l-one)
+                                   ((and (numberp l-two) (null l-one)) (funcall function 0 l-two))
+                                   (t (cardano-assets-merge-alists function l-one l-two)))))
+                (unless (or (null result) (and (numberp result) (zerop result)))
+                  (list (cons key result)))))
+            (cl-union (keys alist1) (keys alist2) :test 'equal))))
+
 
 (provide 'cardano-assets)
 ;;; cardano-assets.el ends here

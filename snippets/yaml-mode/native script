@@ -1,0 +1,16 @@
+# -*- mode: snippet -*-
+# name: native script
+# key: ns
+# expand-env: ((yas-indent-line 'fixed))
+# type: command
+# --
+
+(let ((script-type (completing-read "Which clause do you want to use? "
+                                    '("sig" "any" "all" "before" "after" "atLeast" ))))
+  (yas-expand-snippet
+   (concat "type: " script-type "\n"
+           (pcase script-type
+             ("sig" (format "keyHash: %s" (call-interactively #'cardano-address-key-hash)))
+             ((or "after" "before") "slot: ${1:`(->> (cardano-cli \"query\" \"tip\") (json-parse-string) (gethash \"slot\") (+ 3600))`} # One hour from current slot")
+             ((or "all" "any") "scripts:\n  - $0")
+             ("atLeast" (format "required: ${1:2}\nscripts:\n  - $0"))))))

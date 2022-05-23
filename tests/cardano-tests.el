@@ -14,7 +14,11 @@
 ;;
 ;;; Code:
 
+(require 'dash)
 (require 'bech32)
+(require 'f)
+(require 'emacsql)
+(require 'emacsql-sqlite3)
 (require 'cardano-address)
 (require 'cardano-assets)
 (require 'cardano-tx)
@@ -28,23 +32,63 @@
   (should (equal (cardano-assets-parse-token-bundle '(("6672757374726174696f6e" . 2)))
                  '(("frustration" . 2)))))
 
+(defmacro with-keyring (&rest body)
+  "Fixture to execute BODY with address keyring temporary dir."
+  `(let ((cardano-db-keyring-dir (make-temp-file "test-addr" t)))
+     (when (and cardano-db-connection (emacsql-live-p cardano-db-connection))
+       (emacsql-close cardano-db-connection))
+     (unwind-protect
+         (progn ,@body)
+       (emacsql-close cardano-db-connection)
+       (sleep-for 0 1)  ;; wait for close
+       (setq cardano-db-connection nil)
+       (delete-directory cardano-db-keyring-dir t))))
+
 (ert-deftest address-new-keys ()
-  (let ((cardano-address-keyring-dir (make-temp-file "test-addr" t)))
-    (cardano-address-new-key-files "hi" "there")
-    (should (equal
-             (sort (directory-files cardano-address-keyring-dir)
-                   #'string-lessp)
-             (list "." ".."
-                   "hi.skey" "hi.vkey"
-                   "there.skey" "there.vkey")))))
+  (with-keyring
+   (execute-kbd-macro (vconcat (kbd "RET") )
+                      1
+                      (lambda ()
+                        (cardano-address-new-key-files "hi" "there")))
+   (should (equal
+            (sort (directory-files cardano-db-keyring-dir)
+                  #'string-lessp)
+            (list "." ".."
+                  "cardano.db"
+                  "hi.skey" "hi.vkey"
+                  "stake.skey" "stake.vkey"
+                  "there.skey" "there.vkey")))
+   (should (equal 2 (length (cardano-db-address--list))))))
+
+(ert-deftest address-new-hd-keys ()
+  (with-keyring
+   (cardano-address-gen-recovery-phrase 12)
+   (execute-kbd-macro (vconcat (kbd "RET") )
+                      1
+                      (lambda ()
+                        (cardano-address-new-hd-key-files "1852H/1815H/0H/0/0")))
+   (should (equal
+            (sort (directory-files cardano-db-keyring-dir)
+                  #'string-lessp)
+            (list "." ".."
+                  "1852H_1815H_0H_0_0.skey"
+                  "1852H_1815H_0H_0_0.vkey"
+                  "cardano.db"
+                  "phrase.prv"
+                  "stake.skey" "stake.vkey"
+                  )))
+   (should (equal 1 (length (cardano-db-address--list))))))
 
 (ert-deftest address-validate-hd-path ()
   (pcase-dolist (`(,input ,result)
                  '(("5H" (5H))
                    ("5/2H/8" (5 2H 8))
+                   ("5 2h_8" (5 2H 8))
+                   ("5/2'_8" (5 2H 8))
                    ("PA" nil)
                    ("" nil)
                    (5 nil)
+                   ((4 5h 2) (4 5H 2))
                    ((4 5H 2) (4 5H 2))))
     (should (equal (cardano-address--validate-hd-path input) result))))
 
@@ -85,8 +129,19 @@
 
 (ert-deftest test-alist-string-key ()
   (should (equal
-           (cardano-utils-alist-key-string '((5 . 2) ("TRE" . 5) (:good (:p . a) (yup . 2))))
-           '(("5" . 2) ("TRE" . 5) ("good" ("p" . a) ("yup" . 2))))))
+           (cardano-utils-alist-key-string '((5 . 2) ("TRE" . 5)
+                                             (:good (:p . a) (yup . 2))
+                                             (:datum . [1 yup ((with . 2) (no . 3))])))
+           '(("5" . 2) ("TRE" . 5) ("good" ("p" . a) ("yup" . 2))
+             ("datum" . [1 yup (("with" . 2) ("no" . 3))])))))
+
+(ert-deftest test-datum-find ()
+  (should (equal
+           (mapcar #'cardano-tx-datum-hash
+                   '((("datum" . "Satoshi"))
+                     (("datumhash" . "ba"))
+                     (("datumhash" . ""))))
+           '("062f86b7cc31be2c92bd647b4613227ae3e8902ff3c47cd440a4c36676e483ac" "ba" nil))))
 
 (ert-deftest test-merge-alists ()
   (should (equal
@@ -102,7 +157,17 @@
                       (two . 7))
              (policy2 (mi . 1)
                       (yo . 5))
-             (lovelace . 3675)))))
+             (lovelace . 3675))))
+
+  (should (equal (cardano-assets-merge-alists #'-
+                                              '((lovelace . 2111))
+                                              '((policy1 (one . 3)
+                                                         (two . 7))
+                                                (policy2 (yo . 3))
+                                                (lovelace . 2111)))
+                 '((policy1 (one . -3)
+                            (two . -7))
+                   (policy2 (yo . -3))))))
 
 (ert-deftest test-assets-flatten ()
   (should (equal
@@ -168,6 +233,85 @@
                              (:policy_id "mito"
                               :asset_name "70756c"
                               :quantity 7)]))))
+
+(ert-deftest test-tx-balance ()
+  (with-keyring
+   (emacsql (cardano-db) [:insert-or-ignore :into addresses [raw] :values $v1]
+            '(["addr_test1qz"] ["addr_test1qp"]))
+   (cardano-db-utxo-load '(("8bdfcfa7faa87#0"
+                            ("address" .
+                             "addr_test1qp")
+                            ("value" ("lovelace" . 72605594)))
+                           ("fdacb43b67119#0"
+                            ("address" .
+                             "addr_test1qp")
+                            ("value" ("lovelace" . 50847374)))))
+   (cardano-db-utxo--list)
+
+   (with-temp-buffer
+     (insert "
+inputs:
+  - utxo: 8bdfcfa7faa87#0
+  - utxo: fdacb43b67119#0
+mint:
+  abc64:
+    assets:
+      test: 64
+")
+     (should (equal (cardano-tx-available-balance)
+                    "      abc64:
+        \"test\": 64
+      lovelace: 123452968")))))
+
+(ert-deftest test-tx-witness-query ()
+  (should (equal (cardano-tx-witness-query nil) []))
+  (should (equal (cardano-tx-witness-query '("first"))
+                 [:union :select [path] :from typed-files :where (like path "%first%.vkey")]))
+  (should (equal (cardano-tx-witness-query '("second" "first"))
+                 [:union :select [path] :from typed-files
+                  :where (or (like path "%second%.vkey") (like path "%first%.vkey"))])))
+
+;; test utility
+(defun print-to-file (data filename)
+  "Store DATA object into FILENAME."
+  (with-temp-file filename
+    (prin1 data (current-buffer))))
+
+(defun read-from-file (filename)
+  "Retrieves from FILENAME the object."
+  (with-temp-buffer
+    (insert-file-contents filename)
+    (cl-assert (eq (point) (point-min)))
+    (read (current-buffer))))
+
+(defconst test-dir (f-dirname (f-this-file)))
+
+;; (cardano-db-utxo-load '(("8bdfcfa7faa87#0"
+;;                            ("address" .
+;;                             "addr_test1qp")
+;;                            ("value" ("lovelace" . 72605594)))
+;;                           ("fdacb43b67119#0"
+;;                            ("address" .
+;;                             "addr_test1qp")
+;;                            ("value" ("lovelace" . 50847374)))))
+
+(ert-deftest test-tx-instructions ()
+  (with-keyring
+   (execute-kbd-macro (vconcat (kbd "RET"))
+                      1
+                      (lambda ()
+                        (cardano-address-new-key-files "first")))
+   (cardano-address-new-key "test-stake" t)
+   (--zip-with (should (string-match-p it other))
+               (read-from-file (expand-file-name "all-features.inst" test-dir))
+               (let ((default-directory cardano-db-keyring-dir))
+                 (-> (with-current-buffer
+                         (find-file-noselect (expand-file-name "all-features.yml" test-dir))
+                       (cardano-tx--input-buffer))
+                     (cardano-tx--build-instructions)
+                     (flatten-tree)
+                     ;; (print-to-file "all-features.inst")
+                     )))))
 
 (provide 'cardano-tests)
 ;;; cardano-tests.el ends here

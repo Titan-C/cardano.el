@@ -4,7 +4,7 @@
 ;;
 ;; Author: Óscar Nájera <https://oscarnajera.com>
 ;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
+;; Version: 0.1.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (yaml-mode "0.0.15") (yaml "0.1.0"))
 ;;
@@ -90,8 +90,8 @@
   (with-temp-buffer
     (yaml-mode)
     (thread-first obj
-      yaml-encode
-      insert)
+                  yaml-encode
+                  insert)
     (font-lock-ensure)
     (message (buffer-string))))
 
@@ -99,8 +99,8 @@
   "Display in mini-buffer current chain tip."
   (interactive)
   (thread-first (cardano-cli "query" "tip")
-    json-read-from-string
-    cardano-cli-pretty-yaml-message))
+                json-read-from-string
+                cardano-cli-pretty-yaml-message))
 
 (defun cardano-cli-version ()
   "Print the current cli version."
