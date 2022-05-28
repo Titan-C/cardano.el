@@ -23,5 +23,5 @@ $0
 
 # # For Mary NFTs don't forget to match the validity interval
 # validity-interval:
-#   invalid-hereafter: $2
+#   invalid-hereafter: $5
 # #   invalid-before:

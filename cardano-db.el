@@ -16,6 +16,7 @@
 ;;
 ;;; Code:
 
+(require 'org)
 (require 'dired)
 (require 'dash)
 (require 'yaml)
@@ -150,8 +151,9 @@ MONITOR the address if not nil."
   (when-let ((result
               (car
                (emacsql (cardano-db)
-                        [:select [raw note type description path] :from addresses
-                         :left-join typed-files :on (= spend-key typed-files:id)
+                        [:select [raw note sp:type sp:description sp:path rw:type rw:description rw:path] :from addresses
+                         :left-join typed-files sp :on (= spend-key sp:id)
+                         :left-join typed-files rw :on (= stake-key rw:id)
                          :where (= addresses:id $s1)]
                         address-id))))
     (with-current-buffer (generate-new-buffer "*Address Annotation*")
@@ -159,11 +161,9 @@ MONITOR the address if not nil."
       (org-mode)
       (insert (cadr result) "\n")
       (let ((cur (point)))
-        (insert "\n* Spending Condition: " (elt result 2) "\t:read-only:"
-                "\n" (elt result 3) "\n")
-        (add-text-properties cur (1- (point-max)) '(read-only t))
-        (goto-char (point-max))
-        (cardano-db-insert-native-script-block (elt result 2) (elt result 4))
+        (apply #'cardano-db-insert-file-annotation-block "Spending Condition" (seq-subseq result 2 5))
+        (apply #'cardano-db-insert-file-annotation-block "Reward withdraw Condition" (seq-subseq result 5))
+        (add-text-properties cur (point-max) '(read-only t))
         (goto-char cur)
         (let ((description-length (- (point-max) cur)))
           (local-set-key "\C-c\C-c"
@@ -227,7 +227,8 @@ This reads the file and expects it to be a cardano-cli produced typed file."
                                   file))
                   (list
                    (vector nil (alist-get 'type key-json)
-                           (alist-get 'description key-json)
+                           (concat (file-name-base file) "\n"
+                                   (alist-get 'description key-json))
                            (alist-get 'cborHex key-json)
                            file))))))
     (emacsql (cardano-db)
@@ -236,7 +237,7 @@ This reads the file and expects it to be a cardano-cli produced typed file."
 (defun cardano-db-files-of-type (type)
   "Return all files of TYPE."
   (emacsql (cardano-db)
-           [:select [id path]
+           [:select [id path description]
             :from typed-files :where (= type $s1)]
            type))
 
@@ -264,28 +265,30 @@ This reads the file and expects it to be a cardano-cli produced typed file."
   "Return file & description for FILE-ID."
   (car
    (emacsql (cardano-db)
-            [:select [path description type] :from typed-files :where (= id $s1)]
+            [:select [type description path] :from typed-files :where (= id $s1)]
             file-id)))
 
 (defun cardano-db-file-open (file-id)
   "Open file of FILE-ID."
   (interactive
    (list (tabulated-list-get-id)))
-  (-some-> (cardano-db-file file-id) (car) (find-file)))
+  (-some-> (cardano-db-file file-id) (elt 2) (find-file)))
 
 (defun cardano-db-insert-native-script-block (type file-path)
-  "Insert an org-mode JS block containing FILE-PATH if TYPE is SimpleScriptV2."
-  (let ((cur (point)))
-    (when (string= type "SimpleScriptV2")
-      (insert "\n#+begin_src js\n"
-              (with-temp-buffer
-                (insert-file-contents file-path)
-                (json-pretty-print-buffer)
-                (buffer-string))
-              "\n#+end_src")
-      (add-text-properties cur (point-max) '(read-only t))
-      (goto-char cur))
-    cur))
+  "Insert an `org-mode' JS block containing FILE-PATH if TYPE is SimpleScriptV2."
+  (when (string= type "SimpleScriptV2")
+    (insert "\n#+begin_src js\n"
+            (with-temp-buffer
+              (insert-file-contents file-path)
+              (json-pretty-print-buffer)
+              (buffer-string))
+            "\n#+end_src")))
+
+(defun cardano-db-insert-file-annotation-block (headline type description file-path)
+  "Insert annotation with HEADLINE about FILE-PATH of TYPE and DESCRIPTION."
+  (when type
+    (insert "\n* " headline " " type "\n" description "\n")
+    (cardano-db-insert-native-script-block type file-path)))
 
 (defun cardano-db-file-annotate (file-id)
   "Annotate data for FILE-ID."
@@ -293,23 +296,26 @@ This reads the file and expects it to be a cardano-cli produced typed file."
    (list (tabulated-list-get-id)))
   (when-let ((result (cardano-db-file file-id)))
     (with-current-buffer (generate-new-buffer "*File description*")
-      (setq-local header-line-format (format "Description of file: %s" (car result)))
+      (setq-local header-line-format (format "Description of file: %s" (elt result 2)))
       (org-mode)
       (insert (cadr result) "\n")
-      (let* ((cur (cardano-db-insert-native-script-block (caddr result) (car result)))
-             (script-length (- (point-max) cur)))
-        (local-set-key "\C-c\C-c"
-                       (lambda ()
-                         (interactive)
-                         (emacsql (cardano-db)
-                                  [:update typed-files
-                                   :set (= description $s1)
-                                   :where (= id $s2)]
-                                  (string-trim
-                                   (buffer-substring-no-properties (point-min)
-                                                                   (- (point-max) script-length)))
-                                  file-id)
-                         (kill-buffer))))
+      (let ((cur (point)))
+        (cardano-db-insert-native-script-block (caddr result) (car result))
+        (add-text-properties cur (point-max) '(read-only t))
+        (goto-char cur)
+        (let ((script-length (- (point-max) cur)))
+          (local-set-key "\C-c\C-c"
+                         (lambda ()
+                           (interactive)
+                           (emacsql (cardano-db)
+                                    [:update typed-files
+                                     :set (= description $s1)
+                                     :where (= id $s2)]
+                                    (string-trim
+                                     (buffer-substring-no-properties (point-min)
+                                                                     (- (point-max) script-length)))
+                                    file-id)
+                           (kill-buffer)))))
       (switch-to-buffer (current-buffer)))))
 
 (defvar cardano-db-files-mode-map

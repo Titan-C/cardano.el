@@ -479,8 +479,9 @@ Set ORIGINATING-BUFFER as local variable."
   "Create a new native script."
   (interactive)
   (with-current-buffer (generate-new-buffer "*Cardano Native Script*")
-    (add-to-list 'yas-snippet-dirs cardano-tx-snippet-dir)
     (yaml-mode)
+    (yas-minor-mode-on)
+    (yas-load-directory cardano-tx-snippet-dir)
     (switch-to-buffer (current-buffer))
     (yas-expand-snippet (yas-lookup-snippet "native script"))
     (local-set-key "\C-c\C-c"
@@ -515,7 +516,7 @@ Set ORIGINATING-BUFFER as local variable."
 (define-derived-mode cardano-tx-mode yaml-mode "cardano-tx"
   "Edit a transaction through a yaml representation."
   (numbers-separator-mode)
-  (add-to-list 'yas-snippet-dirs cardano-tx-snippet-dir)
+  (yas-minor-mode-on)
   (yas-load-directory cardano-tx-snippet-dir)
   (add-function :before-until (local 'eldoc-documentation-function)
                 #'cardano-tx-eldoc-documentation-function))

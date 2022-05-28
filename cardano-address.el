@@ -87,7 +87,7 @@ Files are located in keyring dir together with matching address files."
 (defun cardano-address-stake-pick (&optional allow-none)
   "Select from registed stake keys.
 ALLOW-NONE flag for when explicitly skiping a stake key."
-  (let ((named-keys (append (--map (cons (file-name-base (cadr it)) it) (cardano-db-stake-keys))
+  (let ((named-keys (append (--map (cons (car (split-string (caddr it)"\n")) it) (cardano-db-stake-keys))
                             (when allow-none '(("No Reward"))))))
     (assoc (completing-read "Reward key: " named-keys) named-keys)))
 
@@ -105,14 +105,16 @@ Interactively select stake-key to combined with."
   (unless (cardano-db-stake-keys)
     (cardano-db-load-files
      (cardano-address-new-key "stake" t)))
-  (-let (((_name stake-id stake-key) (cardano-address-stake-pick t)))
+  (-let (((sk-note stake-id stake-key) (cardano-address-stake-pick t)))
     (-some->> (cardano-db-files-of-type spending-type)
-      (mapcar (-lambda ((id payment-key))
+      (mapcar (-lambda ((id payment-key desc))
                 (vector nil
                         (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
                             (cardano-address-payment payment-key stake-key)
                           (cardano-address-from-script payment-key stake-key))
-                        id stake-id monitor (file-name-base payment-key))))
+                        id stake-id monitor
+                        (concat "spend: " (car (split-string desc "\n"))
+                                (if sk-note (concat " reward: " sk-note) "")))))
       (emacsql (cardano-db)
                [:insert-or-ignore :into addresses :values $v1]))))
 
@@ -182,7 +184,7 @@ Optionally define the STAKE-VKEY file."
   "Get the key hash out of the VKEY-FILE."
   (interactive
    (list (read-file-name "Select verification key file: " cardano-db-keyring-dir
-                         nil nil nil (lambda (n) (string-suffix-p ".vkey" n)))))
+                         nil t nil (lambda (n) (string-suffix-p ".vkey" n)))))
   (kill-new
    (if (string= (cadar (cardano-db-stake-keys)) vkey-file)
        (cardano-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)

@@ -92,6 +92,19 @@
                    ((4 5H 2) (4 5H 2))))
     (should (equal (cardano-address--validate-hd-path input) result))))
 
+(ert-deftest address-new-script ()
+  (with-keyring
+   (execute-kbd-macro (vconcat (kbd "RET")) ;; new key with stake
+                      1
+                      (lambda () (cardano-address-new-key-files "hi")))
+   (execute-kbd-macro (vconcat "sig" (kbd "RET") "/hi.vkey" (kbd "RET") (kbd "C-c C-c")) ;; new single sig script
+                      1
+                      (lambda () (cardano-tx-new-script)))
+   (execute-kbd-macro (vconcat (kbd "RET")) ;; script with stake
+                      1
+                      (lambda () (cardano-address-load "SimpleScriptV2" t)))
+   (should (equal 2 (length (cardano-db-address--list))))))
+
 (ert-deftest address-constructor ()
   (pcase-dolist (`(,spend-type ,spend-hash ,reward-type ,reward-hash ,network-id ,address ,header)
                  `((keyhash "aa" keyhash "LQ" 0 "addr_test1qpskznz3f3nq0g" 0)
@@ -258,10 +271,10 @@ mint:
     assets:
       test: 64
 ")
-     (should (equal (cardano-tx-available-balance)
-                    "      abc64:
-        \"test\": 64
-      lovelace: 123452968")))))
+     (should (equal (call-interactively #'cardano-tx-available-balance)
+                    "      lovelace: 123452968
+      abc64:
+        \"test\": 64")))))
 
 (ert-deftest test-tx-witness-query ()
   (should (equal (cardano-tx-witness-query nil) []))
