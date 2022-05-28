@@ -163,13 +163,11 @@ Optionally define the STAKE-VKEY file."
 (defun cardano-address-named ()
   "Wallet list for easier selection."
   (->> (emacsql (cardano-db)
-                [:select [raw path] :from addresses
+                [:select [raw note] :from addresses
                  :left-join typed-files :on (= spend-key typed-files:id)])
-       (mapcar (-lambda ((addr path))
-                 (cons (concat (cardano-address--short addr)
-                               (concat " # " (if (string-suffix-p "vkey" path)
-                                                 (file-name-base path)
-                                               path)))
+       (mapcar (-lambda ((addr note))
+                 (cons (concat (cardano-address--short addr) " # "
+                               (or (car (split-string note "\n")) ""))
                        addr)))))
 
 (defun cardano-address-pick ()

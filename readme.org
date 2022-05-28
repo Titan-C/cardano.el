@@ -259,7 +259,7 @@ annotation.
 |----------+-----------------------------------|
 | w        | =cardano-db-address-toggle-watch= |
 | c        | =cardano-db-address-copy=         |
-| a        | =cardano-db-addrres-annotate=     |
+| a        | =cardano-db-address-annotate=     |
 
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using
@@ -644,6 +644,25 @@ This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
 some of the winners. I hope it raises awareness of this tool and also to call
 attention to my Catalyst proposal to fund the further development of this tool.
+** Doom-Emacs interesting buffers
+If you are a Doom-Emacs user, you might realize that it becomes extra cumbersome
+to find the buffers from this tool. That is because of Doom's philosophy of what
+makes an /interesting/ buffer. You can tell Doom that these buffers are
+interesting by including the following code on your configuration file.
+
+#+begin_src emacs-lisp
+(add-hook! 'doom-real-buffer-functions
+  (defun cardano-interesting-buffer (b)
+    "Whether the current buffer's major-mode is a cardano mode."
+    (with-current-buffer b
+      (memq major-mode '(cardano-db-addresses-mode
+                         cardano-db-files-mode
+                         cardano-tx-mode
+                         cardano-wallet-tx-log-mode)))))
+#+end_src
+
+#+RESULTS:
+
 * Footnotes
 
 [fn:1] Finding the UTxOs takes a while and thus your editor blocks during that
