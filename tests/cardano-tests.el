@@ -46,10 +46,12 @@
 
 (ert-deftest address-new-keys ()
   (with-keyring
+   (cardano-address-new-key-files nil "hi" "there")
+   (cardano-address-new-key-files t "stake")
    (execute-kbd-macro (vconcat (kbd "RET") )
                       1
                       (lambda ()
-                        (cardano-address-new-key-files "hi" "there")))
+                        (cardano-address-load "PaymentVerificationKeyShelley_ed25519" t)))
    (should (equal
             (sort (directory-files cardano-db-keyring-dir)
                   #'string-lessp)
@@ -63,10 +65,7 @@
 (ert-deftest address-new-hd-keys ()
   (with-keyring
    (cardano-address-gen-recovery-phrase 12)
-   (execute-kbd-macro (vconcat (kbd "RET") )
-                      1
-                      (lambda ()
-                        (cardano-address-new-hd-key-files "1852H/1815H/0H/0/0")))
+   (cardano-address-new-hd-key-files "1852H/1815H/0H/0/0")
    (should (equal
             (sort (directory-files cardano-db-keyring-dir)
                   #'string-lessp)
@@ -75,8 +74,12 @@
                   "1852H_1815H_0H_0_0.vkey"
                   "cardano.db"
                   "phrase.prv"
-                  "stake.skey" "stake.vkey"
                   )))
+
+   (execute-kbd-macro (vconcat (kbd "RET") )
+                      1
+                      (lambda ()
+                        (cardano-address-load "PaymentVerificationKeyShelley_ed25519" t)))
    (should (equal 1 (length (cardano-db-address--list))))))
 
 (ert-deftest address-validate-hd-path ()
@@ -94,16 +97,15 @@
 
 (ert-deftest address-new-script ()
   (with-keyring
-   (execute-kbd-macro (vconcat (kbd "RET")) ;; new key with stake
-                      1
-                      (lambda () (cardano-address-new-key-files "hi")))
-   (execute-kbd-macro (vconcat "sig" (kbd "RET") "/hi.vkey" (kbd "RET") (kbd "C-c C-c")) ;; new single sig script
+   (cardano-address-new-key-files nil "hi")
+   ;; new single sig script
+   (execute-kbd-macro (vconcat "sig" (kbd "RET") "/hi.vkey" (kbd "RET") (kbd "C-c C-c"))
                       1
                       (lambda () (cardano-tx-new-script)))
    (execute-kbd-macro (vconcat (kbd "RET")) ;; script with stake
                       1
                       (lambda () (cardano-address-load "SimpleScriptV2" t)))
-   (should (equal 2 (length (cardano-db-address--list))))))
+   (should (equal 1 (length (cardano-db-address--list))))))
 
 (ert-deftest address-constructor ()
   (pcase-dolist (`(,spend-type ,spend-hash ,reward-type ,reward-hash ,network-id ,address ,header)
@@ -310,10 +312,8 @@ mint:
 
 (ert-deftest test-tx-instructions ()
   (with-keyring
-   (execute-kbd-macro (vconcat (kbd "RET"))
-                      1
-                      (lambda ()
-                        (cardano-address-new-key-files "first")))
+   (cardano-address-new-key-files nil "first")
+   (cardano-address-new-key-files t "stake")
    (cardano-address-new-key "test-stake" t)
    (--zip-with (should (string-match-p it other))
                (read-from-file (expand-file-name "all-features.inst" test-dir))

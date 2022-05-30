@@ -69,20 +69,16 @@ If STAKE is non-nil generate stake key."
       (cardano-log 'info "Created new key pair: %S" name))
     (list v-file s-file)))
 
-(defun cardano-address-new-key-files (&rest names)
+(defun cardano-address-new-key-files (stake &rest names)
   "Generate the key pairs for each one of NAMES.
+STAKE non-nil generates staking keys. It is the prefix argument.
 Files are located in keyring dir together with matching address files."
   (interactive
-   (split-string
-    (read-string "How do you want to name your keys(separate with space for many): ")))
-  (cardano-address-load-new-keys
-   (mapcan #'cardano-address-new-key names)))
-
-(defun cardano-address-load-new-keys (key-files)
-  "Load to database newly created KEY-FILES the create addresses."
-  (cardano-db-load-files key-files)
-  (cardano-address-load "PaymentVerificationKeyShelley_ed25519" t)
-  (message "Keys created"))
+   (cons current-prefix-arg
+         (split-string
+          (read-string "How do you want to name your keys(space separate them): "))))
+  (cardano-db-load-files
+   (mapcan (lambda (name) (cardano-address-new-key name stake)) names)))
 
 (defun cardano-address-stake-pick (&optional allow-none)
   "Select from registed stake keys.
@@ -91,32 +87,29 @@ ALLOW-NONE flag for when explicitly skiping a stake key."
                             (when allow-none '(("No Reward"))))))
     (assoc (completing-read "Reward key: " named-keys) named-keys)))
 
-(defun cardano-address-load (spending-type monitor)
+(defun cardano-address-load (spending-type monitor &optional stake-note stake-id stake-key-path)
   "Load and MONITOR addresses from all keys of SPENDING-TYPE.
 
-Interactively select stake-key to combined with."
+To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
   (interactive
-   (list (completing-read "Which spending condition? "
+   (cons (completing-read "Which spending condition? "
                           '("PaymentVerificationKeyShelley_ed25519"
                             "SimpleScriptV2"
                             "PlutusScriptV1")
                           nil t)
-         (yes-or-no-p "Watch the created addresses?")))
-  (unless (cardano-db-stake-keys)
-    (cardano-db-load-files
-     (cardano-address-new-key "stake" t)))
-  (-let (((sk-note stake-id stake-key) (cardano-address-stake-pick t)))
-    (-some->> (cardano-db-files-of-type spending-type)
-      (mapcar (-lambda ((id payment-key desc))
-                (vector nil
-                        (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
-                            (cardano-address-payment payment-key stake-key)
-                          (cardano-address-from-script payment-key stake-key))
-                        id stake-id monitor
-                        (concat "spend: " (car (split-string desc "\n"))
-                                (if sk-note (concat " reward: " sk-note) "")))))
-      (emacsql (cardano-db)
-               [:insert-or-ignore :into addresses :values $v1]))))
+         (cons (yes-or-no-p "Watch the created addresses?")
+               (cardano-address-stake-pick t))))
+  (-some->> (cardano-db-files-of-type spending-type)
+    (mapcar (-lambda ((id payment-key desc))
+              (vector nil
+                      (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
+                          (cardano-address-payment payment-key stake-key-path)
+                        (cardano-address-from-script payment-key stake-key-path))
+                      id stake-id monitor
+                      (concat "spend: " (car (split-string desc "\n"))
+                              (if stake-note (concat " -- reward: " stake-note) "")))))
+    (emacsql (cardano-db)
+             [:insert-or-ignore :into addresses :values $v1])))
 
 (defun cardano-address-payment (vkey-file &optional stake-key)
   "Calculate payment address for VKEY-FILE optionally using STAKE-KEY for rewards."
@@ -372,7 +365,7 @@ From extended key in `current-buffer'."
   "Generate the key pairs for HD derivation PATHS."
   (interactive
    (split-string (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
-  (cardano-address-load-new-keys
+  (cardano-db-load-files
    (mapcan (lambda (path)
              (when-let ((path (cardano-address--validate-hd-path path))
                         (named-path (cardano-address-path->str path "_")))

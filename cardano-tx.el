@@ -320,12 +320,12 @@ It produces the actual policy-id from the MINT-ROWS."
 
 (defun cardano-tx--registration-cert (cert)
   "Return registration certificate file or create it if needed from object CERT."
-  (let ((default-stake-key (expand-file-name "stake.vkey" cardano-db-keyring-dir)))
+  (let ((default-stake-key (cadar (cardano-db-stake-keys))))
     (pcase (cardano-utils-get-in cert 'registration)
       ((pred null) nil)
-      (:null (cardano-address-stake-registration-cert default-stake-key))
+      (:null (-some-> default-stake-key (cardano-address-stake-registration-cert)))
       ((and conf (pred listp))
-       (-> (or (cardano-utils-get-in conf 'vkey-file) default-stake-key)
+       (-some-> (or (cardano-utils-get-in conf 'vkey-file) default-stake-key)
            (cardano-address-stake-registration-cert
             (cardano-utils-get-in conf 'deregistration))))
       (_ nil))))
@@ -483,6 +483,7 @@ Set ORIGINATING-BUFFER as local variable."
     (yas-minor-mode-on)
     (yas-load-directory cardano-tx-snippet-dir)
     (switch-to-buffer (current-buffer))
+    (numbers-separator-mode)
     (yas-expand-snippet (yas-lookup-snippet "native script"))
     (local-set-key "\C-c\C-c"
                    (lambda ()

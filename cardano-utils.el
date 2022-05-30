@@ -63,7 +63,7 @@
   (helm
    :sources (helm-build-sync-source options-name
               :candidates candidates
-              :multiline 400))
+              :multiline t))
   (helm-marked-candidates))
 
 (defun cardano-utils-alist-key-string (alist &optional replacer)

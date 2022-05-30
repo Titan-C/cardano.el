@@ -166,6 +166,7 @@ MONITOR the address if not nil."
         (add-text-properties cur (point-max) '(read-only t))
         (goto-char cur)
         (let ((description-length (- (point-max) cur)))
+          (use-local-map (copy-keymap org-mode-map))
           (local-set-key "\C-c\C-c"
                          (lambda ()
                            (interactive)
@@ -304,6 +305,7 @@ This reads the file and expects it to be a cardano-cli produced typed file."
         (add-text-properties cur (point-max) '(read-only t))
         (goto-char cur)
         (let ((script-length (- (point-max) cur)))
+          (use-local-map (copy-keymap org-mode-map))
           (local-set-key "\C-c\C-c"
                          (lambda ()
                            (interactive)
