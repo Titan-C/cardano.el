@@ -301,7 +301,7 @@ This reads the file and expects it to be a cardano-cli produced typed file."
       (org-mode)
       (insert (cadr result) "\n")
       (let ((cur (point)))
-        (cardano-db-insert-native-script-block (caddr result) (car result))
+        (cardano-db-insert-native-script-block (car result) (caddr result))
         (add-text-properties cur (point-max) '(read-only t))
         (goto-char cur)
         (let ((script-length (- (point-max) cur)))

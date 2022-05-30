@@ -71,7 +71,7 @@ If STAKE is non-nil generate stake key."
 
 (defun cardano-address-new-key-files (stake &rest names)
   "Generate the key pairs for each one of NAMES.
-STAKE non-nil generates staking keys. It is the prefix argument.
+STAKE non-nil generates staking keys.  It is the prefix argument.
 Files are located in keyring dir together with matching address files."
   (interactive
    (cons current-prefix-arg
@@ -81,24 +81,26 @@ Files are located in keyring dir together with matching address files."
    (mapcan (lambda (name) (cardano-address-new-key name stake)) names)))
 
 (defun cardano-address-stake-pick (&optional allow-none)
-  "Select from registed stake keys.
-ALLOW-NONE flag for when explicitly skiping a stake key."
+  "Select from registered stake keys.
+ALLOW-NONE flag for when explicitly skipping a stake key."
   (let ((named-keys (append (--map (cons (car (split-string (caddr it)"\n")) it) (cardano-db-stake-keys))
                             (when allow-none '(("No Reward"))))))
     (assoc (completing-read "Reward key: " named-keys) named-keys)))
 
-(defun cardano-address-load (spending-type monitor &optional stake-note stake-id stake-key-path)
+(defun cardano-address-load (spending-type monitor &optional stake-id stake-key-path stake-note)
   "Load and MONITOR addresses from all keys of SPENDING-TYPE.
 
 To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
   (interactive
    (cons (completing-read "Which spending condition? "
-                          '("PaymentVerificationKeyShelley_ed25519"
-                            "SimpleScriptV2"
-                            "PlutusScriptV1")
+                          (mapcar #'car  ;; just to show files types that are known and available
+                                  (emacsql (cardano-db) [:select :distinct type :from typed-files :where (in type $v1)]
+                                           ["PaymentVerificationKeyShelley_ed25519"
+                                            "SimpleScriptV2"
+                                            "PlutusScriptV1"]))
                           nil t)
          (cons (yes-or-no-p "Watch the created addresses?")
-               (cardano-address-stake-pick t))))
+               (cdr (cardano-address-stake-pick t)))))
   (-some->> (cardano-db-files-of-type spending-type)
     (mapcar (-lambda ((id payment-key desc))
               (vector nil
@@ -107,7 +109,8 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
                         (cardano-address-from-script payment-key stake-key-path))
                       id stake-id monitor
                       (concat "spend: " (car (split-string desc "\n"))
-                              (if stake-note (concat " -- reward: " stake-note) "")))))
+                              (if stake-note (concat " -- reward: "
+                                                     (car (split-string stake-note"\n"))) "")))))
     (emacsql (cardano-db)
              [:insert-or-ignore :into addresses :values $v1])))
 
@@ -265,7 +268,7 @@ PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
 Save it unencrypted on `cardano-db-keyring-dir'."
   (interactive
    (list
-    (completing-read "How long shal the recovery phrase be? "
+    (completing-read "How long shall the recovery phrase be? "
                      (mapcar #'number-to-string (number-sequence 9 24 3))
                      nil t)))
   (let ((phrase-file (expand-file-name "phrase.prv" cardano-db-keyring-dir)))
