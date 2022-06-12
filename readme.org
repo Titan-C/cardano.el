@@ -27,12 +27,13 @@ I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3alu
 you doubt whether this project is for you, have a look at how it can change your
 workflow:
 
-| Content                        | Link                                        | Length |
-|--------------------------------+---------------------------------------------+--------|
-| Spending transactions          | https://www.youtube.com/watch?v=Sgvc3WaZlPY |   6:13 |
-| Token minting                  | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
-| Stake delegation               | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
-| Key files & address management | https://www.youtube.com/watch?v=8ZIT9Uq_9A0 |  14:25 |
+| Content                            | Link                                        | Length |
+|------------------------------------+---------------------------------------------+--------|
+| Spending transactions              | https://www.youtube.com/watch?v=Sgvc3WaZlPY |   6:13 |
+| Token minting                      | https://www.youtube.com/watch?v=1hAv63NeJ-U |   9:22 |
+| Stake delegation                   | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
+| Key files & address management     | https://www.youtube.com/watch?v=8ZIT9Uq_9A0 |  14:25 |
+| Cardano Wallet Interface & scripts | https://youtu.be/Ma9nbhbz3wY                |  14:59 |
 
 The videos are a show case of this project, yet as this project develops
 further, they naturally become obsolete. The documentation bellow is an up to

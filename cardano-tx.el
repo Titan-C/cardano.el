@@ -88,10 +88,11 @@ This is only available on TX preview buffers.")
 
 (defun cardano-tx--utxo-contents (utxo-row)
   "Human readable contents of UTXO-ROW."
-  (-let (((utxo addr lovelaces assets datumhash datum) utxo-row))
+  (-let (((utxo addr lovelaces assets datumhash datum addr-note) utxo-row))
     (-> (list
          utxo
          addr
+         addr-note
          (cardano-assets-format-tokens
           (cl-acons "lovelace" lovelaces assets))
          (-some->> datumhash (format "datumhash: %s" ))

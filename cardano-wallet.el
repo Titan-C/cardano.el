@@ -435,6 +435,9 @@ If JSON-DATA default to post unless METHOD is defined."
     (cardano-tx-mode)
     (setq-local cardano-wallet-tx--wallet wallet)
     (yas-expand-snippet (yas-lookup-snippet 'wallet-spend))
+    (use-local-map (copy-keymap cardano-tx-mode-map))
+    (local-set-key (kbd "C-c C-c") #'cardano-wallet-tx-finish)
+    (local-set-key (kbd "C-c C-s") nil)
     (message "Press %s to build and send transaction."
              (substitute-command-keys "\\[cardano-wallet-tx-finish]"))
     (switch-to-buffer (current-buffer))))

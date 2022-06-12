@@ -144,18 +144,18 @@ MONITOR the address if not nil."
   (message "Address %s copied to `kill-ring'."
            (-> (tabulated-list-get-entry) (aref 1) (kill-new))))
 
-(defun cardano-db-address-annotate (address-id)
-  "Annotate data for ADDRESS-ID."
+(defun cardano-db-address-annotate (address)
+  "Annotate data for ADDRESS."
   (interactive
-   (list (tabulated-list-get-id)))
+   (list (aref (tabulated-list-get-entry) 1)))
   (when-let ((result
               (car
                (emacsql (cardano-db)
                         [:select [raw note sp:type sp:description sp:path rw:type rw:description rw:path] :from addresses
                          :left-join typed-files sp :on (= spend-key sp:id)
                          :left-join typed-files rw :on (= stake-key rw:id)
-                         :where (= addresses:id $s1)]
-                        address-id))))
+                         :where (= addresses:raw $s1)]
+                        address))))
     (with-current-buffer (generate-new-buffer "*Address Annotation*")
       (setq-local header-line-format (format "Address: %s" (car result)))
       (org-mode)
@@ -379,7 +379,7 @@ This reads the file and expects it to be a cardano-cli produced typed file."
 (defun cardano-db-utxo-info (&optional v-utxos)
   "Obtain known data for V-UTXOS vector otherwise all UTXoS."
   (emacsql (cardano-db)
-           (vconcat [:select [utxo raw lovelaces assets data:datumhash datum] :from utxos
+           (vconcat [:select [utxo raw lovelaces assets data:datumhash datum note] :from utxos
                      :left-join data :on (= data:datumhash utxos:datumhash)
                      :join addresses :on (= utxos:addr-id addresses:id)]
                     (unless (seq-empty-p v-utxos)
