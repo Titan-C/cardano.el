@@ -2,11 +2,11 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
-;; Author: Óscar Nájera <https://github.com/titan>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
+;; Author: Oscar Najera <https://github.com/titan>
+;; Maintainer: Oscar Najera <hi@oscarnajera.com>
 ;; Version: 0.2.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "25.1") (dash "2.19.0") (yaml-mode "0.0.15") (yaml "0.1.0"))
+;; Package-Requires: ((emacs "27.1") (cardano-tx "0.1.0"))
 ;;
 ;;; Commentary:
 ;;

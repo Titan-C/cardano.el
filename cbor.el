@@ -2,8 +2,8 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
-;; Author: Óscar Nájera <https://oscarnajera.com>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
+;; Author: Oscar Najera <https://oscarnajera.com>
+;; Maintainer: Oscar Najera <hi@oscarnajera.com>
 ;; Version: 0.2.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
@@ -27,7 +27,7 @@
 
 ;;; Commentary:
 ;;
-;; Utility to decode cbor
+;; Utility to decode and encode CBOR
 ;;
 ;; Heavily inspired by the work in
 ;;

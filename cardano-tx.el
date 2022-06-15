@@ -2,12 +2,12 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
-;; Author: Óscar Nájera <https://oscarnajera.com>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
+;; Author: Oscar Najera <https://oscarnajera.com>
+;; Maintainer: Oscar Najera <hi@oscarnajera.com>
+;; Version: 0.1.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (yasnippet "0.14.0") (yaml-mode "0.0.15") (yaml "0.1.0") (helm "3.6.2"))
-;;
+;; Package-Requires: ((emacs "27.1") (f "0.20.0") (yasnippet "0.14.0") (yaml-mode "0.0.15") (yaml "0.1.0") (helm "3.6.2") (cbor "0.2.0") (bech32 "0.1.0") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2"))
+
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; License:

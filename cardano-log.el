@@ -1,13 +1,7 @@
 ;;; cardano-log.el --- Logging System -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021-2022 Óscar Nájera
-;;
-;; Author: Óscar Nájera <https://oscarnajera.com>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.1.0
-;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "25.1"))
-;;
+
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; License:

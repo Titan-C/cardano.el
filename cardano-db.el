@@ -2,12 +2,6 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
-;; Author: Óscar Nájera <https://oscarnajera.com>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;; Version: 0.0.1
-;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (emacsql "3.0.0") (emacsql-sqlite3 "1.0.2") (yaml "0.1.0"))
-;;
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; Commentary:
@@ -173,11 +167,11 @@ MONITOR the address if not nil."
                            (emacsql (cardano-db)
                                     [:update addresses
                                      :set (= note $s1)
-                                     :where (= id $s2)]
+                                     :where (= raw $s2)]
                                     (string-trim
                                      (buffer-substring-no-properties (point-min)
                                                                      (- (point-max) description-length)))
-                                    address-id)
+                                    address)
                            (kill-buffer)))))
       (switch-to-buffer (current-buffer)))))
 

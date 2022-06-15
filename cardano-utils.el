@@ -2,9 +2,6 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
-;; Author: Óscar Nájera <https://oscarnajera.com>
-;; Maintainer: Óscar Nájera <hi@oscarnajera.com>
-;;
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; License:
