@@ -176,7 +176,7 @@ Optionally define the STAKE-VKEY file."
 
 (defun cardano-tx-address-decode (address)
   "Decode ADDRESS string into its representation."
-  (-let (((prefix (key . bt)) (bech32-decode address)))
+  (-let (((prefix key . bt) (bech32-decode address)))
     (-> (list
          (propertize (if (string-suffix-p "test" prefix)
                          "TestNet" "MainNet")
@@ -323,10 +323,10 @@ From extended key in `current-buffer'."
   (goto-char (point-min))
   (let ((type-name (if (looking-at "stake") "Stake" "Payment"))
         (xpriv-key
-         (-> (buffer-string) bech32-decode cadr))
+         (-> (buffer-string) bech32-decode cdr))
         (pub-key
          (progn (cardano-tx-address-public-key t)
-                (-> (buffer-string) bech32-decode cadr)))
+                (-> (buffer-string) bech32-decode cdr)))
         (out-file-name (expand-file-name file-name cardano-tx-db-keyring-dir)))
     (let ((s-file (concat out-file-name ".skey"))
           (v-file (concat out-file-name".vkey")))

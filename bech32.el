@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
 ;;
@@ -119,7 +119,7 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
              (-every #'numberp values)
              (< 5 (length values)) ;; At least checksum
              (bech32-verify-checksum hrp values))
-        (list hrp (bech32-tobase256 (nbutlast values 6)))
+        (cons hrp (bech32-tobase256 (nbutlast values 6)))
       (user-error "Invalid Bech32 string"))))
 
 (provide 'bech32)

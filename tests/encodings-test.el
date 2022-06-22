@@ -55,7 +55,7 @@
                   "11qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc8247j"
                   "split1checkupstagehandshakeupstreamerranterredcaperred2y9e3w"
                   "?1ezyfcl"))
-    (-let (((hrp data) (bech32-decode test)))
+    (-let (((hrp . data) (bech32-decode test)))
       (should (equal (downcase test) (bech32-encode hrp data))))))
 
 (provide 'encodings-test)

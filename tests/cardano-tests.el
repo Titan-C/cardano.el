@@ -118,7 +118,7 @@
     (should (equal (cardano-tx-address-build
                     spend-type spend-hash reward-type reward-hash network-id)
                    address))
-    (should (equal (caadr (bech32-decode address)) header))))
+    (should (equal (cadr (bech32-decode address)) header))))
 
 (ert-deftest test-address-decode ()
   (should (equal
