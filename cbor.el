@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.0
+;; Version: 0.2.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
 ;;
@@ -58,9 +58,6 @@
                         (:copier nil))
   number content)
 
-(defvar cbor--raw nil
-  "BYTESTRING port for access.")
-
 (defun cbor--get-ints (string &optional little)
   "Convert byte STRING to integer.
 Default to big-endian unless LITTLE is non-nil."
@@ -71,8 +68,8 @@ Default to big-endian unless LITTLE is non-nil."
 
 (defun cbor--consume! (bytes)
   "Consume N BYTES from the source string."
-  (prog1 (substring cbor--raw 0 bytes)
-    (setq cbor--raw (substring cbor--raw bytes))))
+  (prog1 (buffer-substring (point) (+ (point) bytes))
+    (forward-char bytes)))
 
 (defun cbor--get-argument! (info)
   "Get argument meaning given INFO."
@@ -146,10 +143,13 @@ Default to big-endian unless LITTLE is non-nil."
 
 (defun cbor->elisp (byte-or-hex-string)
   "Convert BYTE-OR-HEX-STRING into an Emacs Lisp object."
-  (let ((cbor--raw (if (and (zerop (mod (length byte-or-hex-string) 2))
-                            (cbor-hex-p byte-or-hex-string))
-                       (cbor-hexstring->ascii byte-or-hex-string)
-                     byte-or-hex-string)))
+  (with-temp-buffer
+    (set-buffer-multibyte nil)
+    (insert (if (and (zerop (mod (length byte-or-hex-string) 2))
+                     (cbor-hex-p byte-or-hex-string))
+                (cbor-hexstring->ascii byte-or-hex-string)
+              byte-or-hex-string))
+    (goto-char (point-min))
     (cbor--get-data-item!)))
 
 ;; Encoding
