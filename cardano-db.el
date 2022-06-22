@@ -388,7 +388,7 @@ This reads the file and expects it to be a cardano-cli produced typed file."
            [:select [utxo type path typed datum] :from utxos
             :left-join data :on (= data:datumhash utxos:datumhash)
             :join addresses :on (= utxos:addr-id addresses:id)
-            :join typed-files :on (= spend-key typed-files:id)
+            :left-join typed-files :on (= spend-key typed-files:id) ;; Left-join because address could just be inserted
             :where (in utxo $v1)]
            v-utxos))
 

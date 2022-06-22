@@ -336,7 +336,9 @@ It produces the actual policy-id from the MINT-ROWS."
   (when-let ((conf (cardano-utils-get-in cert 'delegation)))
     (cardano-address-delegation-certificate
      (cardano-utils-get-in conf 'pool)
-     (cardano-utils-get-in conf 'vkey-file))))
+     (or
+      (cardano-utils-get-in conf 'vkey-file)
+      (cadar (cardano-db-stake-keys))))))
 
 (defun cardano-tx--build-instructions (input-data)
   "Build a transaction from INPUT-DATA."
@@ -371,7 +373,7 @@ It produces the actual policy-id from the MINT-ROWS."
             (cardano-tx--certificates))
           (-some->> (cardano-utils-get-in input-data 'withdrawals)
             (cardano-tx--withdrawals))
-          (unless build  (list "--fee" (number-to-string (cardano-utils-get-in input-data 'fee)))))))
+          (unless build  (list "--fee" (number-to-string (or (cardano-utils-get-in input-data 'fee) 0)))))))
 
 (defun cardano-tx--build (input-data)
   "Build a transaction from INPUT-DATA."
