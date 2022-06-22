@@ -71,12 +71,12 @@ FMT must be a string suitable for `format' given OBJECTS as arguments."
       (with-current-buffer (cardano-log-buffer)
         (goto-char (point-max))
         (insert
-         (format
-          (concat "[" (propertize "%s" 'face 'font-lock-constant-face) "] "
-                  "[" (propertize "%s" 'face (cardano-log--level-face level)) "]: %s\n")
-          (format-time-string "%Y-%m-%d %H:%M:%S")
-          (upcase (symbol-name level))
-          (apply #'format fmt objects)))))))
+         (format "[%s] [%s]: %s\n"
+                 (thread-first (format-time-string "%Y-%m-%d %H:%M:%S")
+                               (propertize  'face 'font-lock-constant-face))
+                 (thread-first level (symbol-name) (upcase)
+                               (propertize 'face (cardano-log--level-face level)))
+                 (apply #'format fmt objects)))))))
 
 (provide 'cardano-log)
 ;;; cardano-log.el ends here

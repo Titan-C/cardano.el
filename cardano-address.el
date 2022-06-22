@@ -195,7 +195,7 @@ Optionally define the STAKE-VKEY file."
                        (else (format "Else%s" else)))
                      'face 'font-lock-keyword-face)
          (cbor-string->hexstring (concat (seq-subseq bt 0 28)))
-         (when (and (< (ash key -4) 4) (not (null (seq-subseq bt 28))))
+         (when (and (< (ash key -4) 4) (seq-subseq bt 28))
            (propertize "StakingCredential" 'face 'font-lock-keyword-face))
          (cbor-string->hexstring (concat (seq-subseq bt 28))))
         (string-join " ")

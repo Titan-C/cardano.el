@@ -40,7 +40,7 @@
   "Which `cardano-cli' binary to use."
   :type 'file)
 
-(defcustom cardano-cli-node-socket "/tmp/cardano.socket"
+(defcustom cardano-cli-node-socket "/run/cardano/cardano.socket"
   "Where is the node socket."
   :type 'file)
 
