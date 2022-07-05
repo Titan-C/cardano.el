@@ -35,9 +35,9 @@
 (require 'dash)
 (require 'yaml-mode)
 (require 'readable-numbers)
-(require 'cardano-utils)
-(require 'cardano-address)
-(require 'cardano-db)
+(require 'cardano-tx-utils)
+(require 'cardano-tx-address)
+(require 'cardano-tx-db)
 (require 'cardano-tx)
 
 ;; Silence byte-compiler.
@@ -73,7 +73,7 @@ If JSON-DATA default to post unless METHOD is defined."
          (-some-> json-data (json-encode) (encode-coding-string 'utf-8))))
     (url-retrieve
      (concat cardano-wallet-url "/v2/" endpoint)
-     #'cardano-utils--parse-response
+     #'cardano-tx--parse-response
      `(,callback))))
 
 (defun cardano-wallet-show (json)
@@ -90,19 +90,19 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-addresses--refresh ()
   "Refresh the address list."
   (let ((known-addrs
-         (emacsql (cardano-db)
+         (emacsql (cardano-tx-db)
                   [:select [raw id monitor note] :from addresses
                    :where (in raw $v1)]
-                  (cl-map 'vector (lambda (it) (cardano-utils-get-in it "id"))
+                  (cl-map 'vector (lambda (it) (cardano-tx-get-in it "id"))
                           cardano-wallet--buffer-response))))
     (->> cardano-wallet--buffer-response
          (seq-map (lambda (res)
-                    (let* ((deriv (-> (cardano-utils-get-in res "derivation_path")
+                    (let* ((deriv (-> (cardano-tx-get-in res "derivation_path")
                                       (seq-drop 2) ;; remove standard 1852H/1815H
                                       (string-join "/")))
-                           (state (cardano-utils-get-in res "state"))
-                           (address (cardano-utils-get-in res "id"))
-                           (db-info (cardano-utils-get-in known-addrs address)))
+                           (state (cardano-tx-get-in res "state"))
+                           (address (cardano-tx-get-in res "id"))
+                           (db-info (cardano-tx-get-in known-addrs address)))
                       (list (or (car db-info) deriv)
                             (vector
                              (if (elt db-info 1) "YES" "NO")
@@ -114,14 +114,14 @@ If JSON-DATA default to post unless METHOD is defined."
                                 deriv)
                               (-some--> db-info (elt it 2)
                                         (string-remove-prefix deriv it)
-                                        (cardano-utils-nw-p it)
+                                        (cardano-tx-nw-p it)
                                         (format " -- %s" it))))))))
          (setq tabulated-list-entries))))
 
 (defun cardano-wallet-address--refresh-query (&optional _arg _noconfirm)
   "Query for registered addresses and `revert-buffer'."
   (cardano-wallet
-   (format "wallets/%s/addresses" (cardano-utils-get-in cardano-wallet-current "id"))
+   (format "wallets/%s/addresses" (cardano-tx-get-in cardano-wallet-current "id"))
    (lambda (json-response)
      (with-current-buffer (get-buffer "*Cardano Wallet Addresses*")
        (setq cardano-wallet--buffer-response json-response)
@@ -132,7 +132,7 @@ If JSON-DATA default to post unless METHOD is defined."
   "Show addresses for WALLET."
   (interactive (list (cardano-wallet--get-row-source)))
   (with-current-buffer (get-buffer-create "*Cardano Wallet Addresses*")
-    (cardano-db-addresses-mode)
+    (cardano-tx-db-addresses-mode)
     (setq-local cardano-wallet-current wallet)
     (add-hook 'tabulated-list-revert-hook #'cardano-wallet-addresses--refresh nil t)
     (setq revert-buffer-function #'cardano-wallet-address--refresh-query)
@@ -171,12 +171,12 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet--balance-row (entry)
   "Extract values from ENTRY to display a balance row."
-  (list (cardano-utils-get-in entry "balance" "total" "quantity")
-        (cardano-utils-get-in entry "balance" "available" "quantity")
-        (cardano-utils-get-in entry "balance" "reward" "quantity")
-        (if (seq-empty-p (cardano-utils-get-in entry "assets" "total"))
+  (list (cardano-tx-get-in entry "balance" "total" "quantity")
+        (cardano-tx-get-in entry "balance" "available" "quantity")
+        (cardano-tx-get-in entry "balance" "reward" "quantity")
+        (if (seq-empty-p (cardano-tx-get-in entry "assets" "total"))
             "NO" "YES")
-        (cardano-utils-get-in entry "delegation" "active" "target")))
+        (cardano-tx-get-in entry "delegation" "active" "target")))
 
 (defun cardano-wallet-balances--refresh ()
   "Query Cardano Wallet for wallet balances then refresh buffer with new entries."
@@ -188,8 +188,8 @@ If JSON-DATA default to post unless METHOD is defined."
             (setq cardano-wallet--buffer-response)
             (seq-map
              (lambda (res)
-               (let ((name (cardano-utils-get-in res "name"))
-                     (id (cardano-utils-get-in res "id")))
+               (let ((name (cardano-tx-get-in res "name"))
+                     (id (cardano-tx-get-in res "id")))
                  (list id (cl-map 'vector
                                   #'cardano-wallet-print-col
                                   (append (list name id)
@@ -202,7 +202,7 @@ If JSON-DATA default to post unless METHOD is defined."
   "Find originating data for table row."
   (seq-find (lambda (elt)
               (string=
-               (cardano-utils-get-in elt "id")
+               (cardano-tx-get-in elt "id")
                (tabulated-list-get-id)))
             cardano-wallet--buffer-response))
 
@@ -247,21 +247,21 @@ If JSON-DATA default to post unless METHOD is defined."
      (helm
       :prompt "Wallet: "
       :sources (helm-build-sync-source
-                "wallet"
-                :candidates (--map (cons (cardano-utils-get-in it "name") it)
-                                   json)
-                :action (helm-make-actions
-                         "Payment" #'cardano-wallet-tx-new
-                         "Get addresses" #'cardano-wallet-addresses
-                         "Get transaction log" #'cardano-wallet-tx-log
-                         "Describe wallet" #'cardano-wallet-describe
-                         "Delete wallet" #'cardano-wallet-delete))))))
+                   "wallet"
+                 :candidates (--map (cons (cardano-tx-get-in it "name") it)
+                                    json)
+                 :action (helm-make-actions
+                          "Payment" #'cardano-wallet-tx-new
+                          "Get addresses" #'cardano-wallet-addresses
+                          "Get transaction log" #'cardano-wallet-tx-log
+                          "Describe wallet" #'cardano-wallet-describe
+                          "Delete wallet" #'cardano-wallet-delete))))))
 
 (defun cardano-wallet-describe (wallet)
   "Pop buffer describing WALLET."
   (interactive (list (cardano-wallet--get-row-source)))
   (cardano-wallet
-   (format "wallets/%s/" (cardano-utils-get-in wallet "id"))
+   (format "wallets/%s/" (cardano-tx-get-in wallet "id"))
    #'cardano-wallet-show))
 
 ;;; Wallet transactions
@@ -269,7 +269,7 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-db-tx-annotation (txid)
   "Query annotation for TXID."
   (caar
-   (emacsql (cardano-db)
+   (emacsql (cardano-tx-db)
             [:select annotation :from tx-annotation :where (= txid $s1)]
             txid)))
 
@@ -284,7 +284,7 @@ If JSON-DATA default to post unless METHOD is defined."
     (local-set-key "\C-c\C-c"
                    (lambda ()
                      (interactive)
-                     (emacsql (cardano-db)
+                     (emacsql (cardano-tx-db)
                               [:insert :or :replace :into tx-annotation :values $v1]
                               (vector tx-hash (buffer-substring-no-properties (point-min) (point-max))))
                      (kill-buffer)))
@@ -312,21 +312,21 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-tx-log--refresh ()
   "Refresh the transaction log entry list."
   (let ((annotations
-         (emacsql (cardano-db) [:select * :from tx-annotation :where (in txid $v1)]
-                  (vconcat (--map (cardano-utils-get-in it "id")
+         (emacsql (cardano-tx-db) [:select * :from tx-annotation :where (in txid $v1)]
+                  (vconcat (--map (cardano-tx-get-in it "id")
                                   cardano-wallet--buffer-response)))))
     (->> cardano-wallet--buffer-response
          (seq-map
           (lambda (res)
-            (let ((date (cardano-utils-get-in res "inserted_at" "time"))
-                  (id (cardano-utils-get-in res "id"))
-                  (net-amount (cardano-utils-get-in res "amount" "quantity")))
+            (let ((date (cardano-tx-get-in res "inserted_at" "time"))
+                  (id (cardano-tx-get-in res "id"))
+                  (net-amount (cardano-tx-get-in res "amount" "quantity")))
               (list id
                     (cl-map 'vector
                             #'cardano-wallet-print-col
                             (list date id
-                                  (cardano-utils-get-in res "fee" "quantity")
-                                  (if (string= "incoming" (cardano-utils-get-in res "direction"))
+                                  (cardano-tx-get-in res "fee" "quantity")
+                                  (if (string= "incoming" (cardano-tx-get-in res "direction"))
                                       net-amount
                                     (propertize (cardano-wallet-print-col net-amount)
                                                 'face 'font-lock-keyword-face))
@@ -338,7 +338,7 @@ If JSON-DATA default to post unless METHOD is defined."
   "Query for registered transactions and `revert-buffer'."
   (cardano-wallet
    (format "wallets/%s/transactions"
-           (cardano-utils-get-in cardano-wallet-current "id"))
+           (cardano-tx-get-in cardano-wallet-current "id"))
    (lambda (json-response)
      (with-current-buffer (get-buffer "*Cardano Wallet Transactions*")
        (setq cardano-wallet--buffer-response json-response)
@@ -359,7 +359,7 @@ If JSON-DATA default to post unless METHOD is defined."
   "Show TX-HASH from WALLET-ID."
   (interactive
    (list
-    (cardano-utils-get-in cardano-wallet-current "id")
+    (cardano-tx-get-in cardano-wallet-current "id")
     (aref (tabulated-list-get-entry) 1)))
   (cardano-wallet
    (format "wallets/%s/transactions/%s" wallet-id tx-hash)
@@ -375,7 +375,7 @@ If JSON-DATA default to post unless METHOD is defined."
    (list
     (read-from-minibuffer "Name your wallet: ")
     (split-string (f-read
-                   (read-file-name "File with your seed phrase: " cardano-db-keyring-dir)))
+                   (read-file-name "File with your seed phrase: " cardano-tx-db-keyring-dir)))
     (read-passwd "Password for your wallet: " t)))
   (cardano-wallet
    "wallets"
@@ -391,7 +391,7 @@ If JSON-DATA default to post unless METHOD is defined."
    (list
     (read-from-minibuffer "Name your wallet: ")
     (split-string (f-read
-                   (read-file-name "File with extended public key: " cardano-db-keyring-dir)))))
+                   (read-file-name "File with extended public key: " cardano-tx-db-keyring-dir)))))
   (cl-assert (cbor-hex-p xpub))
   (cardano-wallet
    "wallets"
@@ -403,9 +403,9 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-delete (wallet)
   "Delete WALLET."
   (interactive (list (cardano-wallet--get-row-source)))
-  (let ((wallet-id (cardano-utils-get-in wallet "id")))
+  (let ((wallet-id (cardano-tx-get-in wallet "id")))
     (when (yes-or-no-p (format "Really delete wallet '%s' with id '%s'?"
-                               (upcase (cardano-utils-get-in wallet "name")) wallet-id))
+                               (upcase (cardano-tx-get-in wallet "name")) wallet-id))
       (cardano-wallet
        (concat "wallets/" wallet-id)
        (lambda (_x) (message "Wallet %s deleted." wallet-id))
@@ -415,11 +415,11 @@ If JSON-DATA default to post unless METHOD is defined."
   "Process buffer into a transaction, sign it and open PREVIEW."
   (interactive)
   (let* ((input-data (cardano-tx--input-buffer))
-         (outputs (cardano-utils-get-in input-data 'outputs))
+         (outputs (cardano-tx-get-in input-data 'outputs))
          (tx-buffer (current-buffer)))
     (cardano-wallet
      (concat "wallets/"
-             (cardano-utils-get-in cardano-wallet-tx--wallet "id")
+             (cardano-tx-get-in cardano-wallet-tx--wallet "id")
              "/transactions")
      (lambda (json) (cardano-wallet-show json) (kill-buffer tx-buffer))
      "POST"
@@ -428,15 +428,15 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet-payment (tx-out)
   "Build payment object from TX-OUT."
-  (if-let ((target-addr (cardano-utils-nw-p
-                         (cardano-utils-get-in tx-out 'address)))
-           (amount  (cardano-utils-get-in tx-out 'amount)))
+  (if-let ((target-addr (cardano-tx-nw-p
+                         (cardano-tx-get-in tx-out 'address)))
+           (amount  (cardano-tx-get-in tx-out 'amount)))
       `(:address ,target-addr
-        :amount (:quantity ,(cardano-utils-get-in tx-out 'amount 'lovelace)
+        :amount (:quantity ,(cardano-tx-get-in tx-out 'amount 'lovelace)
                  :unit "lovelace")
         :assets
         ,(->>
-          (cardano-assets-flatten amount)
+          (cardano-tx-assets-flatten amount)
           (cl-remove-if #'numberp)
           (cl-map 'vector
                   (-lambda ((amount policy tokenname))
@@ -462,17 +462,17 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-tx-assets-pick ()
   "Load assets available on wallet to `kill-ring'."
   (interactive)
-  (->> (cardano-utils-get-in cardano-wallet-tx--wallet "assets" "total")
+  (->> (cardano-tx-get-in cardano-wallet-tx--wallet "assets" "total")
        (--map
         (concat "      " ;; ident
-                (cardano-utils-get-in it "policy_id")
+                (cardano-tx-get-in it "policy_id")
                 ":\n        "
                 (let ((assetname (cbor-hexstring->ascii
-                                  (cardano-utils-get-in it "asset_name"))))
-                  (if (cardano-utils-nw-p assetname) assetname "\"\"")) ": "
+                                  (cardano-tx-get-in it "asset_name"))))
+                  (if (cardano-tx-nw-p assetname) assetname "\"\"")) ": "
                 (number-to-string
-                 (cardano-utils-get-in it "quantity")) "\n"))
-       (cardano-utils-pick "Assets")
+                 (cardano-tx-get-in it "quantity")) "\n"))
+       (cardano-tx-pick "Assets")
        (string-join)
        (kill-new)))
 

@@ -1,4 +1,4 @@
-;;; cardano-cli.el --- Wrapper around the cardano cli -*- lexical-binding: t; -*-
+;;; cardano-tx-cli.el --- Wrapper around the cardano cli -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
@@ -25,30 +25,29 @@
 ;;
 ;;; Code:
 
-(require 'cardano-log)
+(require 'cardano-tx-log)
 (require 'json)
 (require 'seq)
 (require 'subr-x)
 (require 'yaml)
 (require 'yaml-mode)
 
-(defgroup cardano-cli nil
-  "Integration with cardano-cli."
-  :group 'cardano)
+(defcustom cardano-tx-cli-command (executable-find "cardano-cli")
+  "Which `cardano-tx-cli' binary to use."
+  :type 'file
+  :group 'cardano-tx)
 
-(defcustom cardano-cli-command (executable-find "cardano-cli")
-  "Which `cardano-cli' binary to use."
-  :type 'file)
-
-(defcustom cardano-cli-node-socket "/run/cardano/cardano.socket"
+(defcustom cardano-tx-cli-node-socket "/run/cardano/cardano.socket"
   "Where is the node socket."
-  :type 'file)
+  :type 'file
+  :group 'cardano-tx)
 
-(defcustom cardano-cli-network-args '("--testnet-magic" "1097911063")
+(defcustom cardano-tx-cli-network-args '("--testnet-magic" "1097911063")
   "Declares the network magic needed."
-  :type '(repeat string))
+  :type '(repeat string)
+  :group 'cardano-tx)
 
-(defvar cardano-cli-skip-network-args
+(defvar cardano-tx-cli-skip-network-args
   (list "key" "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
         "version" "policyid"
         "registration-certificate"
@@ -56,19 +55,19 @@
         "delegation-certificate")
   "Commands that don't require adding the network arguments.")
 
-(defun cardano-cli (&rest args)
+(defun cardano-tx-cli (&rest args)
   "Call the cli interface connected to the node socket pass ARGS."
-  (let ((process-environment (list (concat "CARDANO_NODE_SOCKET_PATH=" cardano-cli-node-socket)))
-        (cmd (if (seq-intersection cardano-cli-skip-network-args args)
+  (let ((process-environment (list (concat "CARDANO_NODE_SOCKET_PATH=" cardano-tx-cli-node-socket)))
+        (cmd (if (seq-intersection cardano-tx-cli-skip-network-args args)
                  args
-               (append args cardano-cli-network-args))))
-    (cardano-log 'debug "%s %s" cardano-cli-command (mapconcat #'prin1-to-string cmd " "))
+               (append args cardano-tx-cli-network-args))))
+    (cardano-tx-log 'debug "%s %s" cardano-tx-cli-command (mapconcat #'prin1-to-string cmd " "))
     (with-temp-buffer
-      (cardano-cli-reply
-       (apply #'call-process cardano-cli-command nil (current-buffer) nil
+      (cardano-tx-cli-reply
+       (apply #'call-process cardano-tx-cli-command nil (current-buffer) nil
               cmd)))))
 
-(defun cardano-cli-reply (result)
+(defun cardano-tx-cli-reply (result)
   "Process the RESULT value from an external process and the `current-buffer'."
   (if (= result 0)
       (string-trim (buffer-string))
@@ -76,10 +75,10 @@
     (when (re-search-forward "Usage:" nil 'end)
       (backward-sentence))
     (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
-      (cardano-log 'error err-msg)
+      (cardano-tx-log 'error err-msg)
       (error err-msg))))
 
-(defun cardano-cli-pretty-yaml-message (obj)
+(defun cardano-tx-cli-pretty-yaml-message (obj)
   "Encode OBJ into yaml and display on mini-buffer."
   (with-temp-buffer
     (yaml-mode)
@@ -89,17 +88,17 @@
     (font-lock-ensure)
     (message (buffer-string))))
 
-(defun cardano-cli-tip ()
+(defun cardano-tx-cli-tip ()
   "Display in mini-buffer current chain tip."
   (interactive)
-  (thread-first (cardano-cli "query" "tip")
+  (thread-first (cardano-tx-cli "query" "tip")
                 json-read-from-string
-                cardano-cli-pretty-yaml-message))
+                cardano-tx-cli-pretty-yaml-message))
 
-(defun cardano-cli-version ()
+(defun cardano-tx-cli-version ()
   "Print the current cli version."
   (interactive)
-  (message (cardano-cli "version")))
+  (message (cardano-tx-cli "version")))
 
-(provide 'cardano-cli)
-;;; cardano-cli.el ends here
+(provide 'cardano-tx-cli)
+;;; cardano-tx-cli.el ends here

@@ -1,3 +1,4 @@
+# -*- mode: snippet -*-
 # key: tx
 # name: spend
 # expand-env: ((yas-indent-line 'fixed))
@@ -10,5 +11,5 @@ outputs:
     amount:
       lovelace: 0
   # ALWAYS think about your change address
-  - address:  `(cardano-address-pick)`
+  - address:  `(cardano-tx-address-pick)`
     change: true

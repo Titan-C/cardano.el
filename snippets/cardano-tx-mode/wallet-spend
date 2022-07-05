@@ -1,11 +1,12 @@
+# -*- mode: snippet -*-
 # key: wtx
 # name: wallet-spend
 # expand-env: ((yas-indent-line 'fixed))
 # --
 
-# Wallet: `(cardano-utils-get-in cardano-wallet-tx--wallet "name")`
-# ID: `(cardano-utils-get-in cardano-wallet-tx--wallet "id")`
-# Lovelace balance: `(cardano-utils-get-in cardano-wallet-tx--wallet "balance" "total" "quantity")`
+# Wallet: `(cardano-tx-get-in cardano-wallet-tx--wallet "name")`
+# ID: `(cardano-tx-get-in cardano-wallet-tx--wallet "id")`
+# Lovelace balance: `(cardano-tx-get-in cardano-wallet-tx--wallet "balance" "total" "quantity")`
 
 outputs:
   - address:  $1

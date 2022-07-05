@@ -1,4 +1,4 @@
-;;; cardano-utils.el --- Utilities for cardano wallet -*- lexical-binding: t; -*-
+;;; cardano-tx-utils.el --- Utilities for cardano wallet -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
@@ -30,23 +30,27 @@
 (require 'subr-x)
 (require 'url)
 (require 'yaml)
-(require 'cardano-log)
+(require 'cardano-tx-log)
 (require 'cbor)
 
 ;; Silence byte-compiler.
 (defvar url-http-end-of-headers)
 
-(defun cardano-utils-nw-p (s)
+(defgroup cardano-tx nil
+  "Cardano transaction editor."
+  :group 'tools)
+
+(defun cardano-tx-nw-p (s)
   "Trimmed not white-space string S."
   (when (stringp s)
     (let ((trimed (string-trim s)))
       (and (not (string-empty-p trimed)) trimed))))
 
-(defun cardano-utils-get-in (table &rest keys)
+(defun cardano-tx-get-in (table &rest keys)
   "From nested hash-map TABLE get element in path of KEYS."
-  (--reduce-from (when acc (cardano-utils--reducer-get-in acc it)) table keys))
+  (--reduce-from (when acc (cardano-tx--reducer-get-in acc it)) table keys))
 
-(defun cardano-utils--reducer-get-in (acc entry)
+(defun cardano-tx--reducer-get-in (acc entry)
   "Common function to obtain ENTRY from an ACC object."
   (pcase entry
     ((and (pred integerp) (guard (or (listp acc) (vectorp acc))))
@@ -55,7 +59,7 @@
     ((guard (listp acc)) (alist-get entry acc nil nil #'string=))
     ((guard (hash-table-p acc)) (gethash entry acc))))
 
-(defun cardano-utils-pick (options-name candidates)
+(defun cardano-tx-pick (options-name candidates)
   "Simple multiple CANDIDATES picker of type OPTIONS-NAME."
   (helm
    :sources (helm-build-sync-source options-name
@@ -63,7 +67,7 @@
               :multiline t))
   (helm-marked-candidates))
 
-(defun cardano-utils-alist-key-string (alist &optional replacer)
+(defun cardano-tx-alist-key-string (alist &optional replacer)
   "Quick & dirty last pass to ensure keys in ALIST are strings.
 It really expects a well formed alist.
 
@@ -77,29 +81,29 @@ REPLACER is optionally a function to replace the keys."
                        (funcall (or replacer #'identity)))
                   (cond
                    ((consp rest)
-                    (cardano-utils-alist-key-string rest replacer))
+                    (cardano-tx-alist-key-string rest replacer))
                    ((vectorp rest)
                     (cl-map 'vector (lambda (it)
                                       (if (consp it)
-                                          (cardano-utils-alist-key-string it replacer)
+                                          (cardano-tx-alist-key-string it replacer)
                                         it))
                             rest))
                    (t rest))))
           alist))
 
-(defun cardano-utils--parse-response (status callback)
+(defun cardano-tx--parse-response (status callback)
   "Parse response and log failure STATUS.
 
 CALLBACK processes the response."
   (goto-char url-http-end-of-headers)
-  (let ((response (if (cardano-utils-nw-p
+  (let ((response (if (cardano-tx-nw-p
                        (buffer-substring (point) (point-max)))
                       (json-read))))
     (if-let ((error-status (plist-get status :error)))
-        (let ((err-message (cardano-utils-get-in response "message")))
-          (cardano-log 'error "Request status: %S %s" error-status err-message)
+        (let ((err-message (cardano-tx-get-in response "message")))
+          (cardano-tx-log 'error "Request status: %S %s" error-status err-message)
           (error err-message))
       (funcall callback response))))
 
-(provide 'cardano-utils)
-;;; cardano-utils.el ends here
+(provide 'cardano-tx-utils)
+;;; cardano-tx-utils.el ends here

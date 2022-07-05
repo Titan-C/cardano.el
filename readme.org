@@ -88,7 +88,7 @@ Clone this repository and make sure it is in your =EMACSLOADPATH=, then evaluate
 the file =cardano-tx.el=.  If you use =use-package= you can use this.
 #+begin_src emacs-lisp
 (use-package cardano-tx
-  :commands (cardano-tx-new cardano-cli-tip)
+  :commands (cardano-tx-new cardano-tx-cli-tip)
   :load-path "/path/to/this/repository")
 #+end_src
 ** Using the Guix package manager
@@ -110,23 +110,23 @@ There are some variables you need to configure.
 
 #+begin_src emacs-lisp
 ;; Path to cli tool
-(setq cardano-cli-command "/full/path/to/the/cardano-cli")
+(setq cardano-tx-cli-command "/full/path/to/the/cardano-cli")
 ;; Path to cardano-address binary
-(setq cardano-address-command (executable-find "cardano-address"))
+(setq cardano-tx-address-command (executable-find "cardano-address"))
 ;; Path to the running node socket
-(setq cardano-cli-node-socket "/full/path/to/the/testnet/socket")
+(setq cardano-tx-cli-node-socket "/full/path/to/the/testnet/socket")
 ;; These are the network arguments for the testnet
-(setq cardano-cli-network-args '("--testnet-magic" "1097911063"))
+(setq cardano-tx-cli-network-args '("--testnet-magic" "1097911063"))
 ;; When connecting to mainnet use
-;; (setq cardano-cli-network-args '("--mainnet"))
+;; (setq cardano-tx-cli-network-args '("--mainnet"))
 
 ;; This directory stores all your key pairs (verification & signing), it is your
 ;; wallet. It also holds your staking key. Make sure this folder exists, as this
 ;; tool will not create it. For wallet hygiene use separate directories for
 ;; mainnet and testnets. It also holds an SQLite database to administer known data.
-(setq cardano-db-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
+(setq cardano-tx-db-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
 ;; In case you want to log the CLI commands used
-(setq cardano-log-level 'debug)
+(setq cardano-tx-log-level 'debug)
 #+end_src
 ** Cardano-Wallet (optional)
 Although this package focuses on the low-level, high power interfaces for the
@@ -149,7 +149,7 @@ load the package and specify the API endpoint. Using =use-package= for example:
 
 * Usage
 Start by interactively querying the tip of the Blockchain. Use: =M-x
-cardano-cli-tip=, you should see at the bottom of the screen on the mini-buffer
+cardano-tx-cli-tip=, you should see at the bottom of the screen on the mini-buffer
 the information about the tip.
 
 At the time of writing it showed this:
@@ -163,14 +163,14 @@ syncProgress: 100.00
 #+end_src
 ** Create key pairs and manage addresses
 *** Bag of keys
-To create new keys and their address use: =M-x cardano-address-new-key-files=.
+To create new keys and their address use: =M-x cardano-tx-address-new-key-files=.
 It will prompt you how to name your new keys in your wallet. Type a name or many
 space separated names. This will populate the directory you defined in
-=cardano-db-keyring-dir=, with the keys.
+=cardano-tx-db-keyring-dir=, with the keys.
 
 This means:
 #+begin_src emacs-lisp
-M-x cardano-address-new-key-files RET first second third RET
+M-x cardano-tx-address-new-key-files RET first second third RET
 #+end_src
 will generated the following folder structure:
 
@@ -199,16 +199,16 @@ precautions to secure your files, work on an air gapped machine.
 
 To create a staking key (under the name =stake2=) use the ELisp command:
 #+begin_src emacs-lisp
-(cardano-address-new-key "stake2" t)
+(cardano-tx-address-new-key "stake2" t)
 #+end_src
 
 The name =stake= is the default name for the reward key, and created
 automatically. After creating additional reward keys, which you want to use in
-you addresses use =cardano-address-load=, select the spending key type, confirm
+you addresses use =cardano-tx-address-load=, select the spending key type, confirm
 whether to watch the new address and which reward key you want to use. All key
 file and addresses are stored in the SQLite database in the =cardano.db= file.
 
-The command =cardano-db-addresses= opens a table view of all your know addresses.
+The command =cardano-tx-db-addresses= opens a table view of all your know addresses.
 The keyboard shortcut =c= copies the address in the row your point is. =w=
 toggles whether that address is watched in your UTxO set. =a= lets you write a
 comment for that particular address.
@@ -217,8 +217,8 @@ comment for that particular address.
 You can also install [[https://github.com/input-output-hk/cardano-addresses][cardano-addresses]] and let this tool help you manage your
 keys following the CIP-3 specification, and CIP-11.
 
-The function =cardano-address-gen-recovery-phrase= will assist you creating a
-mnemonic seed recovery phrase and save it on your =cardano-address-keyring=.
+The function =cardano-tx-address-gen-recovery-phrase= will assist you creating a
+mnemonic seed recovery phrase and save it on your =cardano-tx-db-keyring-dir=.
 
 #+begin_quote
 *⚠ WARNING:* Please keep in mind, that all keys and recovery phrases are plain
@@ -226,42 +226,42 @@ text files on your system. Thus when working with "mainnet" ADA, make sure you
 take the necessary precautions to secure your files, work on air gapped machine.
 #+end_quote
 
-The function =cardano-address-new-hd-key-files= prompts for a derivation path
+The function =cardano-tx-address-new-hd-key-files= prompts for a derivation path
 for your key, you can still call this with many space separated paths. Following
 CIP-11 the path =1852H/1815H/0H/2/0= will generate the staking key.
 *** Registering key files
 If you generated some key files previous to using cardano.el or from previous
 versions of it, before its use of a SQLite database you need to register those
 keys to the database. The easiest way is using =dired= to mark the files you
-want to register and the interactively calling =cardano-db-dired-load-files=.
+want to register and the interactively calling =cardano-tx-db-dired-load-files=.
 You can also register cardano native simple scripts (multisigs/timelocks) and
 Plutus script files.
 
 To visualize the files registered in the database call the interactive function
-=cardano-db-typed-files=. This open a table view of all registered files. You
+=cardano-tx-db-typed-files=. This open a table view of all registered files. You
 include annotations to each file. Annotations helps you identify in the future
 their content more than the filename. You can also open the files directly from
 this view.
 
-| Shortcut | Function                   | Description            |
-|----------+----------------------------+------------------------|
-| o        | =cardano-db-file-open=     | Open file              |
-| a        | =cardano-db-file-annotate= | Add a note to the file |
+| Shortcut | Function                      | Description            |
+|----------+-------------------------------+------------------------|
+| o        | =cardano-tx-db-file-open=     | Open file              |
+| a        | =cardano-tx-db-file-annotate= | Add a note to the file |
 
 *** Manage addresses
-=cardano-address-load= calculates addresses from registered files and load them
+=cardano-tx-address-load= calculates addresses from registered files and load them
 on the address database. Call it after registering new files.
 
-To visualize addresses loaded into your database call =cardano-db-addresses=.
+To visualize addresses loaded into your database call =cardano-tx-db-addresses=.
 This opens a view with all registered addresses. You can toggle which ones to
 actively watch(query UTxO balance), copy the address to the keyboard or edit the
 annotation.
 
-| shortcut | function                          |
-|----------+-----------------------------------|
-| w        | =cardano-db-address-toggle-watch= |
-| c        | =cardano-db-address-copy=         |
-| a        | =cardano-db-address-annotate=     |
+| shortcut | function                             |
+|----------+--------------------------------------|
+| w        | =cardano-tx-db-address-toggle-watch= |
+| c        | =cardano-tx-db-address-copy=         |
+| a        | =cardano-tx-db-address-annotate=     |
 
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using
@@ -324,7 +324,7 @@ When creating this transaction there are utility functions that help you with so
 For example:
 
 - =cardano-tx-helm-utxos= Pick from utxos that are in your wallet for easy input.
-- =cardano-address-pick= Pick from all your registered addresses
+- =cardano-tx-address-pick= Pick from all your registered addresses
 - =cardano-tx-available-balance= Calculates, displays and loads to kill-ring the balance not yet committed to transaction outputs.
 
 The Plutus scripts we send funds in this transaction are
@@ -616,15 +616,15 @@ the clauses of a simple script. Simple scripts are recursive, thus you can go as
 deep as you want stating you spending clauses.
 
 Press =C-c C-c= to save the script. This will convert the script from it's YAML
-editing form to a JSON file and save it on your =cardano-db-keyring-dir= for
+editing form to a JSON file and save it on your =cardano-tx-db-keyring-dir= for
 later use using the script hash as file name. Please understand that after that
 step you should never modify that file. If you need a new script with slight
 variations, make a new script and it to the database and keep that copy.
 
-Visiting =cardano-db-typed-files= you can see the newly created script. I advise
-you to also write a description of it using the annotation feature. Later you
-can call =cardano-address-load= to calculate the address of this script and have it
-available for use.
+Visiting =cardano-tx-db-typed-files= you can see the newly created script. I
+advise you to also write a description of it using the annotation feature. Later
+you can call =cardano-tx-address-load= to calculate the address of this script
+and have it available for use.
 
 ** Full wallet integration (Optional)
 If you installed the [[*Cardano-Wallet (optional)][cardano-wallet]] the main entry point is the interactive
