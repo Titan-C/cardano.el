@@ -39,7 +39,7 @@
 (require 'json)
 (require 'yaml)
 (require 'yasnippet)
-(require 'numbers)
+(require 'readable-numbers)
 (require 'cardano-cli)
 (require 'cardano-db)
 (require 'cardano-address)
@@ -486,7 +486,7 @@ Set ORIGINATING-BUFFER as local variable."
     (yas-minor-mode-on)
     (yas-load-directory cardano-tx-snippet-dir)
     (switch-to-buffer (current-buffer))
-    (numbers-separator-mode)
+    (readable-numbers-mode)
     (yas-expand-snippet (yas-lookup-snippet "native script"))
     (local-set-key "\C-c\C-c"
                    (lambda ()
@@ -519,7 +519,7 @@ Set ORIGINATING-BUFFER as local variable."
 
 (define-derived-mode cardano-tx-mode yaml-mode "cardano-tx"
   "Edit a transaction through a yaml representation."
-  (numbers-separator-mode)
+  (readable-numbers-mode)
   (yas-minor-mode-on)
   (yas-load-directory cardano-tx-snippet-dir)
   (add-function :before-until (local 'eldoc-documentation-function)

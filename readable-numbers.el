@@ -1,4 +1,4 @@
-;;; numbers.el --- Separate long integers -*- lexical-binding: t; -*-
+;;; readable-numbers.el --- Visually separate long integers -*- lexical-binding: t; -*-
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
@@ -21,53 +21,53 @@
 
 ;;; Commentary:
 ;;
-;;  Overlay to make large numbers readable
+;;  Overlay to make large numbers in buffer readable
 
 ;;; Code:
 
-(defgroup numbers nil
+(defgroup readable-numbers nil
   "Make unreadable big integers readable."
   :group 'tools)
 
-(defcustom numbers-separator "_"
+(defcustom readable-numbers-separator "_"
   "Character to separate integers."
   :type 'string)
 
-(defcustom numbers-separator-interval 3
-  "Number of numbers per group."
+(defcustom readable-numbers-separator-interval 3
+  "Group this many numbers."
   :type 'integer)
 
-(defcustom numbers-separator-ignore-threshold 4
+(defcustom readable-numbers-separator-ignore-threshold 4
   "Ignore numbers with this many digits.
 This prevents separating four digit years."
   :type 'integer)
 
-(defun numbers-set-overlay-properties ()
-  "Set properties of numbers overlays.
+(defun readable-numbers-set-overlay-properties ()
+  "Set properties of readable-numbers overlays.
 Consider current setting of user variables."
   ;; In-identifier overlay
-  (put 'numbers 'evaporate t)
-  (put 'numbers 'before-string numbers-separator))
+  (put 'readable-numbers 'evaporate t)
+  (put 'readable-numbers 'before-string readable-numbers-separator))
 
-(numbers-set-overlay-properties)
+(readable-numbers-set-overlay-properties)
 
-(defun numbers-overlay-p (overlay)
+(defun readable-numbers-overlay-p (overlay)
   "Return whether OVERLAY is an overlay of glasses mode."
-  (eq (overlay-get overlay 'category) 'numbers))
+  (eq (overlay-get overlay 'category) 'readable-numbers))
 
-(defun numbers-make-overlay (beg end)
+(defun readable-numbers-make-overlay (beg end)
   "Create and return readability overlay over the region from BEG to END."
   (let ((overlay (make-overlay beg end)))
-    (overlay-put overlay 'category 'numbers)
+    (overlay-put overlay 'category 'readable-numbers)
     overlay))
 
-(defun numbers-make-unreadable (beg end)
+(defun readable-numbers-make-unreadable (beg end)
   "Return identifiers in the region from BEG to END to their unreadable state."
   (dolist (o (overlays-in beg end))
-    (when (numbers-overlay-p o)
+    (when (readable-numbers-overlay-p o)
       (delete-overlay o))))
 
-(defun numbers-make-readable (beg end)
+(defun readable-numbers-make-readable (beg end)
   "Make the identifiers in the region from BEG to END readable."
   (save-excursion
     (save-match-data
@@ -75,24 +75,24 @@ Consider current setting of user variables."
       (while (re-search-forward (rx word-boundary
                                     (group  (1+ digit)
                                             word-boundary)) end t)
-        (when (> (length (match-string 1)) numbers-separator-ignore-threshold)
+        (when (> (length (match-string 1)) readable-numbers-separator-ignore-threshold)
           (dolist (ins (number-sequence
-                        (- (match-end 1) numbers-separator-interval)
+                        (- (match-end 1) readable-numbers-separator-interval)
                         (1+ (match-beginning 1))
-                        (- numbers-separator-interval)))
-            (numbers-make-overlay ins (1+ ins))))))))
+                        (- readable-numbers-separator-interval)))
+            (readable-numbers-make-overlay ins (1+ ins))))))))
 
-(defun numbers-change (beg end)
-  "After-change function updating numbers overlays between BEG to END."
-  (numbers-make-unreadable beg end)
-  (numbers-make-readable beg end))
+(defun readable-numbers-change (beg end)
+  "After-change function updating readable-numbers overlays between BEG to END."
+  (readable-numbers-make-unreadable beg end)
+  (readable-numbers-make-readable beg end))
 
-(define-minor-mode numbers-separator-mode
-  "Separate long numbers."
+(define-minor-mode readable-numbers-mode
+  "Separate long readable-numbers."
   :lighter " numsep"
-  (if numbers-separator-mode
-      (jit-lock-register #'numbers-change)
-    (jit-lock-unregister #'numbers-change)))
+  (if readable-numbers-mode
+      (jit-lock-register #'readable-numbers-change)
+    (jit-lock-unregister #'readable-numbers-change)))
 
-(provide 'numbers)
-;;; numbers.el ends here
+(provide 'readable-numbers)
+;;; readable-numbers.el ends here

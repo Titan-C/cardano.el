@@ -34,7 +34,7 @@
 (require 'yaml)
 (require 'dash)
 (require 'yaml-mode)
-(require 'numbers)
+(require 'readable-numbers)
 (require 'cardano-utils)
 (require 'cardano-address)
 (require 'cardano-db)
@@ -82,7 +82,7 @@ If JSON-DATA default to post unless METHOD is defined."
     (erase-buffer)
     (insert (yaml-encode json))
     (yaml-mode)
-    (numbers-separator-mode)
+    (readable-numbers-mode)
     (display-buffer (current-buffer))))
 
 ;;; Wallet addresses management
