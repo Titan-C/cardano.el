@@ -170,7 +170,7 @@ Optionally define the STAKE-VKEY file."
    (list (read-file-name "Select verification key file: " cardano-tx-db-keyring-dir
                          nil t nil (lambda (n) (string-suffix-p ".vkey" n)))))
   (kill-new
-   (if (string= (cadar (cardano-tx-db-stake-keys)) vkey-file)
+   (if (member (expand-file-name vkey-file) (mapcar #'cadr (cardano-tx-db-stake-keys)))
        (cardano-tx-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
      (cardano-tx-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))))
 
