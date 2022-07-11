@@ -120,7 +120,7 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
              (< 5 (length values)) ;; At least checksum
              (bech32-verify-checksum hrp values))
         (list hrp (bech32-tobase256 (nbutlast values 6)))
-      (error "Invalid Bech32 string"))))
+      (user-error "Invalid Bech32 string"))))
 
 (provide 'bech32)
 ;;; bech32.el ends here

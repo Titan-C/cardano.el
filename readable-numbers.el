@@ -2,6 +2,12 @@
 ;;
 ;; Copyright (C) 2021 Óscar Nájera
 ;;
+;; Author: Oscar Najera <https://oscarnajera.com>
+;; Maintainer: Oscar Najera <hi@oscarnajera.com>
+;; Version: 0.1.0
+;; Homepage: https://github.com/Titan-C/cardano.el
+;; Package-Requires: ((emacs "24.1"))
+;;
 ;; This file is not part of GNU Emacs.
 ;;
 ;;; License:
