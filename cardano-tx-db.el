@@ -4,6 +4,21 @@
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
+;;; License:
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+;;
 ;;; Commentary:
 ;;
 ;;  Interface to database
@@ -200,9 +215,9 @@ MONITOR the address if not nil."
 
 ;;; Typed Files
 (defun cardano-tx-db-load-files (files)
-  "Load into cardano-tx-db all FILES.
+  "Load into local database all FILES.
 
-This reads the file and expects it to be a cardano-tx-cli produced typed file."
+This reads the file and expects it to be a `cardano-cli' produced typed file."
   (-some->> files
     (mapcan (lambda (file)
               (when-let ((key-json
@@ -234,9 +249,9 @@ This reads the file and expects it to be a cardano-tx-cli produced typed file."
            type))
 
 (defun cardano-tx-db-dired-load-files ()
-  "Load into cardano-tx-db all Dired marked files.
+  "Load into local database all Dired marked files.
 
-This reads the file and expects it to be a cardano-tx-cli produced typed file."
+This reads the file and expects it to be a `cardano-cli' produced typed file."
   (interactive)
   (cardano-tx-db-load-files (dired-get-marked-files)))
 
