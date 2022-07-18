@@ -641,6 +641,60 @@ state of the blockchain.
 individually. Its menu lets start a payment transaction, list all addresses,
 look at the transaction history, and show a description of the wallet.
 
+* Ouroboros mini-protocols
+The file =ouroboros.el= contains a simple implementation of [[https://hydra.iohk.io/job/Cardano/ouroboros-network/native.network-docs.x86_64-linux/latest/download/2][The Shelley
+Networking Protocol]] to connect to the node and query information. You can use it
+for the local state query mini-protocol, for example:
+#+begin_src emacs-lisp
+(setq sock (ouroboros-connect "/home/titan/test-cardano/dev-vasil/bp-vasil.socket" 9))
+(ouroboros-local sock 'acquire 'tip)
+(ouroboros-local sock 'query 'chain-point)
+(ouroboros-local sock 'query 'block-no)
+(ouroboros-local sock 'query 'system-start)
+(ouroboros-local sock 'query 'hard-fork-eras)
+(ouroboros-local sock 'query 'current-era)
+
+(ouroboros-local sock 'query '(shelley epoch-no))
+(ouroboros-local sock 'query `(shelley non-myopic-member-rewards
+                                       ,(ouroboros-non-myopic-stake '(123456 456789133))))
+(ouroboros-local sock 'query '(shelley current-params))
+(ouroboros-local sock 'query '(shelley proposed-params))
+(ouroboros-local sock 'query '(shelley stake-distribution))
+(ouroboros-local sock 'query `(shelley utxo-by-address
+                                 ,(ouroboros-address-query
+                                   '("addr_test1vpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgs2k5jvj"
+                                     "addr_test1zqeh2kmcf3wlp8jjlzve75mmvnmyac730p8j33zkxdawy7xn5qmqcmgt2t5gzpygzpr3y2y72d9ftuydut8qr8tqvqvs06lg42"))))
+(ouroboros-local sock 'query '(shelley utxo-whole))
+(->
+ (ouroboros-local sock 'query '(shelley cbor-wrap epoch-no))
+ (cbor-tag-content)
+ (cbor->elisp))
+(ouroboros-local sock 'query `(shelley filtered-delegations-and-reward-accounts
+                                 ,(ouroboros-reward-addresses
+                                   '("stake_test17r9cs7pxyf2nzlwg64fkf646kwq0mq9ucjlscefdthyj33sy8f0js"
+                                     "stake_test1upm98yt2h04p386u7sdsz5entjf6dw38u2kc7fkvxy9z82s5f2lrh"))))
+(ouroboros-local sock 'query '(shelley genesis-config))
+(ouroboros-local sock 'query '(shelley reward-provenance))
+(ouroboros-local sock 'query `(shelley utxo-by-tx-in
+                                 ,(ouroboros-utxo
+                                   '("c6a1c03c473753c932277634a39e8a3bacf4ae792eac174ab1e1b272d142db1f#0"))))
+
+(ouroboros-local con 'query '(shelley stake-pools))
+(ouroboros-local con 'query `(shelley stake-pool-params
+                                 ,(cbor-tag-create
+                                   :number 258
+                                   :content ["13ab5c2838adaf649eb7e974779b705bb2b997c3c8132c3700c78dfe"
+                                             "96788607f51dfaf3d115594e09cc6b75740035b8da05891995434268"])))
+(ouroboros-local con 'query '(shelley reward-info-pools))
+(ouroboros-local con 'release)
+(ouroboros-local con 'done)
+#+end_src
+
+I published a written document about all available queries in
+https://arsmagna.xyz/docs/network-lsq/.  A short video series teaching you about
+the node communication and the local state query is available on YouTube.
+https://www.youtube.com/watch?v=rAWPudH55D4&list=PLwRUn-ZyfKJx2sj5hgJqL68KCTq7aSvkpG
+
 * Extra info
 This an awarded project of the Cardano Summit 2021 - Plutus Pioneer Capstone
 Challenge. You can read about it on the [[https://iohk.io/en/blog/posts/2021/10/12/building-on-the-cardano-summit/][IOHK blog]], and watch the [[https://www.youtube.com/watch?v=R0s3lPG8XDw&t=620s][interview]] with
