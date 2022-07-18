@@ -39,6 +39,13 @@ The videos are a show case of this project, yet as this project develops
 further, they naturally become obsolete. The documentation bellow is an up to
 date reference.
 
+** Support
+If you like this project, you can support further development through Catalyst.
+I'm currently working on 2 extensions and I ask for your support.
+
+- Support for post Vasil Hard-Fork features :: https://cardano.ideascale.com/c/idea/421674
+- Hardware wallet support :: https://cardano.ideascale.com/c/idea/420147
+
 * Word of caution
 This project is a running experiment and in Alpha stage. Don't rely on any of
 its functions or interfaces to be stable, because I'm still testing its user
