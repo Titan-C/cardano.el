@@ -175,7 +175,7 @@ Specify the NETWORK-MAGIC."
     (unless (memq msg '(release done))
       (let ((rebu (get-buffer-create (format "*ouroboros %s*" 'local-state-query)))
             (blen 0))
-        (cl-loop  do (accept-process-output proc 0.2)
+        (cl-loop  do (accept-process-output proc 0.5)
                   until (or (< 0 (buffer-size rebu) 12288) (= blen (buffer-size rebu)))
                   do (setq blen (buffer-size rebu)))
         (when-let ((result (ouroboros-local-reply (ouroboros-parse-reply rebu))))

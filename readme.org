@@ -686,15 +686,15 @@ for the local state query mini-protocol, for example:
                                  ,(ouroboros-utxo
                                    '("c6a1c03c473753c932277634a39e8a3bacf4ae792eac174ab1e1b272d142db1f#0"))))
 
-(ouroboros-local con 'query '(shelley stake-pools))
-(ouroboros-local con 'query `(shelley stake-pool-params
+(ouroboros-local sock 'query '(shelley stake-pools))
+(ouroboros-local sock 'query `(shelley stake-pool-params
                                  ,(cbor-tag-create
                                    :number 258
                                    :content ["13ab5c2838adaf649eb7e974779b705bb2b997c3c8132c3700c78dfe"
                                              "96788607f51dfaf3d115594e09cc6b75740035b8da05891995434268"])))
-(ouroboros-local con 'query '(shelley reward-info-pools))
-(ouroboros-local con 'release)
-(ouroboros-local con 'done)
+(ouroboros-local sock 'query '(shelley reward-info-pools))
+(ouroboros-local sock 'release)
+(ouroboros-local sock 'done)
 #+end_src
 
 I published a written document about all available queries in
