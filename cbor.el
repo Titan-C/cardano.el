@@ -61,10 +61,7 @@
 (defun cbor--get-ints (string &optional little)
   "Convert byte STRING to integer.
 Default to big-endian unless LITTLE is non-nil."
-  (let ((work-str (if little string (reverse string))))
-    (apply #'logior
-           (-zip-with #'ash (string-to-list work-str)
-                      (number-sequence 0 (* 8 (length work-str)) 8)))))
+  (seq-reduce (lambda (acc n) (logior n (ash acc 8))) (if little (nreverse string) string) 0))
 
 (defun cbor--consume! (bytes)
   "Consume N BYTES from the source string."
