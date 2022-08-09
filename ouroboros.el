@@ -6,10 +6,25 @@
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
 ;; Version: 0.1.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0"))
+;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (cbor "0.2.1") (bech32 "0.1.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
+;;; License:
+
+;; This program is free software; you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation; either version 3, or (at your option)
+;; any later version.
+
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 ;;; Commentary:
 ;;
 ;;  Implements the Ouroboros Network mini-protocols to communicate with Cardano
@@ -211,7 +226,7 @@ Specify the NETWORK-MAGIC."
                                   (decoded-time-set-defaults 0))))
                     (decoded-time--alter-second time (* picosecs (expt 10 -12)))
                     (format-time-string
-                     "%Y-%m-%dT%H:%M:%S+00:00%z"
+                     "%Y-%m-%dT%T%z"
                      (encode-time time) t))))))
     ('block-no
      (cons [2] (pcase result (`[,unk ,block-no] `(:unk ,unk :block-no ,block-no)))))
