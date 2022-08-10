@@ -6,7 +6,7 @@
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
 ;; Version: 0.1.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (cbor "0.2.1") (bech32 "0.1.1"))
+;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (cbor "0.2.2") (bech32 "0.2.0"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -36,23 +36,18 @@
 (require 'cbor)
 (require 'bech32)
 
-(defvar ouroboros-protocols '((hand-shake . 0)
-                              (chain-sync . 5)
-                              (local-tx-submission . 6)
-                              (local-state-query . 7)))
+(defconst ouroboros-protocols '((hand-shake . 0)
+                                (chain-sync . 5)
+                                (local-tx-submission . 6)
+                                (local-state-query . 7)))
 
-(defvar ouroboros-hard-fork-eras
+(defconst ouroboros-hard-fork-eras
   '(Byron
     Shelley
     Allegra
     Mary
     Alonzo
     Babbage))
-
-(defun ouroboros-uint-network-order (value size)
-  "Convert integer VALUE into a byte list of SIZE."
-  (--map (logand (ash value it) 255)
-         (number-sequence (* (- 1 size) 8) 0 8)))
 
 (cl-defstruct (ouroboros-network (:constructor ouroboros-network--create)
                                  (:copier nil))
@@ -105,9 +100,9 @@ Specify the NETWORK-MAGIC."
      proc
      (apply #'unibyte-string
             (append
-             (ouroboros-uint-network-order time 4)
-             (ouroboros-uint-network-order msg-protocol 2)
-             (ouroboros-uint-network-order (length payload) 2)
+             (cbor--luint time 4)
+             (cbor--luint msg-protocol 2)
+             (cbor--luint (length payload) 2)
              (string-to-list payload))))))
 
 (defun ouroboros-collect-reply! ()
@@ -180,13 +175,14 @@ Specify the NETWORK-MAGIC."
 ;;; Local State Query mini-protocol
 (defun ouroboros-local (connection msg &optional arg)
   "Handle local state query over CONNECTION using MSG and ARG."
-  (let ((proc (ouroboros-network-process connection)))
+  (let ((proc (ouroboros-network-process connection))
+        (parsed-arg (if (eq 'query msg)
+                        (car (ouroboros-local-query connection arg))
+                      arg)))
     (ouroboros-send-payload!
      connection
      'local-state-query
-     (ouroboros-local-state--queries msg (if (eq 'query msg)
-                                             (car (ouroboros-local-query connection arg))
-                                           arg)))
+     (ouroboros-local-state--queries msg parsed-arg))
     (unless (memq msg '(release done))
       (let ((rebu (get-buffer-create (format "*ouroboros %s*" 'local-state-query)))
             (blen 0))
@@ -321,7 +317,7 @@ Specify the NETWORK-MAGIC."
    (sort (mapcar (lambda (stk-addr)
                    (-let (((_hrp type . data) (bech32-decode stk-addr)))
                      (cons
-                      (if (ouroboros-test-bit type 4) 0 1) ;; scripts must rank lower
+                      (if (bech32-test-bit type 4) 0 1) ;; scripts must rank lower
                       data)))
                  reward-addresses)
          (lambda (a b) (< (cbor--get-ints a) (cbor--get-ints b))))
@@ -334,10 +330,6 @@ Specify the NETWORK-MAGIC."
     :number 258
     :content)))
 
-(defun ouroboros-test-bit (int n)
-  "Test if N bit is set in INT."
-  (= 1 (logand 1 (ash int (- n)))))
-
 (defun ouroboros-addr-comp (one two)
   "String comparison of addresses ONE and TWO."
   (cl-flet ((ord-str (str)
@@ -345,7 +337,7 @@ Specify the NETWORK-MAGIC."
                             (netword-id (logand 15 head))
                             (addr-type (ash head -4)))
                        (concat (number-to-string netword-id)
-                               (if (ouroboros-test-bit addr-type 0) "A" "B") ;; Has script first
+                               (if (bech32-test-bit addr-type 0) "A" "B") ;; Has script first
                                (substring str 2 58)
                                (if (= #b011 (ash addr-type -1)) "D" "C") ;; Is enterprise Second
                                (substring str 58)))))
