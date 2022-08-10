@@ -47,7 +47,7 @@
     (should (equal (cbor--get-ints input) expected)))
   (should (equal (cbor--get-ints "1EQl" t) 1817265457)))
 
-(ert-deftest bech32-test ()
+(ert-deftest bech32-test-bech32 ()
   (dolist (test '("a12uel5l"
                   "A12UEL5L"
                   "an83characterlonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1tt5tgs"
@@ -55,9 +55,52 @@
                   "11qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc8247j"
                   "split1checkupstagehandshakeupstreamerranterredcaperred2y9e3w"
                   "?1ezyfcl"))
-    (-let (((hrp . data) (bech32-decode test)))
-      (should (equal (downcase test) (bech32-encode hrp data))))))
+    (-let (((encoding hrp . data) (bech32--decode test)))
+      (should (eq encoding 'bech32))
+      (should (equal (downcase test) (bech32--encode 'bech32 hrp data))))))
 
-(provide 'encodings-test)
+(ert-deftest bech32-fails ()
+  (dolist (test '(" 1nwldj5"
+                  (format "%c1axkwrx" #x7f)
+                  (format "%c1eym55h" #x80)
+                  "an84characterslonghumanreadablepartthatcontainsthenumber1andtheexcludedcharactersbio1569pvx",
+                  "pzry9x0s0muk"
+                  "1pzry9x0s0muk"
+                  "x1b4n0q5v"
+                  "li1dgmt3"
+                  (format "de1lg7wt%c" #xff)
+                  "A1G7SGD8"
+                  "10a06t8"
+                  "1qzzfhee"))
+    (should-error (bech32--decode test))))
+
+(ert-deftest bech32-test-bech32m ()
+  (dolist (test '("A1LQFN3A"
+                  "a1lqfn3a"
+                  "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6"
+                  "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx"
+                  "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8"
+                  "split1checkupstagehandshakeupstreamerranterredcaperredlc445v"
+                  "?1v759aa"))
+    (-let (((encoding hrp . data) (bech32--decode test)))
+      (should (eq encoding 'bech32m))
+      (should (equal (downcase test) (bech32--encode 'bech32m hrp data))))))
+
+(ert-deftest bech32-fails-m ()
+  (dolist (test '(" 1xj0phk"
+                  (format "%c1g6xzxy" #x7f)
+                  (format "%c1vctc34" #x80)
+                  "an84characterslonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11d6pts4",
+                  "qyrz8wqd2c9m"
+                  "1qyrz8wqd2c9m"
+                  "y1b0jsk6g"
+                  "lt1igcx5c0"
+                  "in1muywd"
+                  "mm1crxm3i"
+                  "au1s5cgom"
+                  "M1VUXWEZ"
+                  "16plkw9"
+                  "1p2gdwpf"))
+    (should-error (bech32--decode test))))
 
 ;;; encodings-test.el ends here

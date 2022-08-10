@@ -4,9 +4,9 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.1.1
+;; Version: 0.2.0
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
+;; Package-Requires: ((emacs "26.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -34,45 +34,62 @@
 ;;
 ;;; Code:
 
-
-(require 'dash)
 (require 'cl-lib)
 (require 'subr-x)
 
 (defconst bech32-charset "qpzry9x8gf2tvdw0s3jn54khce6mua7l")
-(defconst bech32-reverse-charset
-  (-zip (string-to-list bech32-charset) (number-sequence 0 31)))
+(defconst bech32-reverse-charset (seq-map-indexed #'cons bech32-charset))
+
+(defconst bech32-encodings '((bech32 . 1)
+                             (bech32m . #x2bc830a3)))
+
+(defsubst bech32-test-bit (int n)
+  "Test if N bit is set in INT."
+  (= 1 (logand 1 (ash int (- n)))))
+
+(defun bech32-valid-hrp (str)
+  "Check if STR is a valid string for human readable part."
+  (cl-flet ((char-out-bounds (char) (not (<= 33 char 126))))
+    (cond
+     ((string-empty-p str) (user-error "Bech32: No human readable part"))
+     ((> (length str) 83) (user-error "Bech32: Human readable part too long" ))
+     ((cl-some #'char-out-bounds str)
+      (user-error "Bech32: Invalid char '%c'" (cl-find-if #'char-out-bounds str)))
+     (t t))))
 
 (defun bech32-polymod (values)
   "Internal function that computes the Bech32 checksum for VALUES (5-bit) list."
-  (let ((generator '(#x3b6a57b2 #x26508e6d #x1ea119fa #x3d4233dd #x2a1462b3))
-        (chk 1))
-    (dolist (value values chk)
-      (let ((top (ash chk -25)))
-        (setq chk (logxor (ash (logand chk #x1ffffff) 5) value))
-        (dolist (i (number-sequence 0 4))
-          (when (= 1 (logand 1 (ash top (- i))))
-            (setq chk (logxor chk (elt generator i)))))))))
+  (let ((generator [#x3b6a57b2 #x26508e6d #x1ea119fa #x3d4233dd #x2a1462b3]))
+    (seq-reduce
+     (lambda (chk value)
+       (apply #'logxor
+              (logxor (ash (logand chk #x1ffffff) 5) value)
+              (seq-map-indexed (lambda (v i) (if (bech32-test-bit chk (+ 25 i)) v 0)) generator)))
+     values 1)))
 
 (defun bech32-hrp-expand (hrp)
   "Expand the HRP into values for checksum computation."
-  (append (--map (ash it -5) hrp)
+  (append (mapcar (lambda (it) (ash it -5)) hrp)
           '(0)
-          (--map (logand it 31) hrp)))
+          (mapcar (lambda (it) (logand it 31)) hrp)))
 
-(defun bech32-create-checksum (hrp data)
-  "Compute the checksum values given HRP and DATA (5-bit)."
-  (let* ((values (append (bech32-hrp-expand hrp) data))
-         (polymod
-          (logxor 1 (bech32-polymod (append values '(0 0 0 0 0 0))))))
-    (--map (logand 31 (ash polymod it))
-           (number-sequence -25 0 5))))
+(defun bech32-create-checksum (encoding hrp data)
+  "Compute the checksum values with ENCODING given HRP and DATA (5-bit)."
+  (let ((polymod
+         (logxor (cdr (assoc encoding bech32-encodings))
+                 (bech32-polymod
+                  (append (bech32-hrp-expand hrp) data '(0 0 0 0 0 0))))))
+    (mapcar (lambda (it) (logand 31 (ash polymod it)))
+            (number-sequence -25 0 5))))
 
 (defun bech32-verify-checksum (hrp data)
   "Verify a checksum given HRP and converted DATA (5-bit) characters."
-  (= 1 (bech32-polymod (append (bech32-hrp-expand hrp) data))))
+  (car
+   (rassoc
+    (bech32-polymod (append (bech32-hrp-expand hrp) data))
+    bech32-encodings)))
 
-(cl-defun bech32-convertbits (data frombits tobits padding)
+(defun bech32-convertbits (data frombits tobits padding)
   "General power-of-2 base conversion.
 Take a DATA list with elements bounded by 2^FROMBITS to a new list
 of elements bounded by 2^TOBITS.  PADDING is applied."
@@ -88,7 +105,7 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
         (push (logand (ash acc (- bits)) maxv) result)))
     (when (and padding (> bits 0))
       (push (logand (ash acc (- tobits bits)) maxv) result))
-    (reverse result)))
+    (nreverse result)))
 
 (defun bech32-tobase32 (data)
   "DATA is a list of 8 bit integers."
@@ -98,29 +115,43 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
   "DATA is a list of 5 bit integers."
   (bech32-convertbits data 5 8 nil))
 
-(defun bech32-encode (hrp data)
-  "Compute a Bech32 string given HRP and DATA (8-bit) values."
-  (let ((data-5-bit (bech32-tobase32 data))
-        (dc-hrp (downcase hrp)))
-    (thread-last (append data-5-bit (bech32-create-checksum dc-hrp data-5-bit))
+(defun bech32--encode (encoding hrp data-5-bit)
+  "Compute a Bech32 string with ENCODING given HRP and DATA-5-BIT values."
+  (cl-assert (cl-every (lambda (x) (< x 32)) data-5-bit))
+  (cl-assert (assoc encoding bech32-encodings))
+  (cl-assert (bech32-valid-hrp hrp))
+  (let ((dc-hrp (downcase hrp)))
+    (thread-last (append data-5-bit (bech32-create-checksum encoding dc-hrp data-5-bit))
                  (mapcar (lambda (v) (elt bech32-charset v)))
                  concat
                  (concat dc-hrp "1"))))
 
+(defun bech32-encode (hrp data &optional encoding)
+  "Compute a Bech32 string with ENCODING given HRP and DATA 8-bit values."
+  (bech32--encode (or encoding 'bech32) hrp (bech32-tobase32 data)))
+
+(defun bech32--decode (bech32string)
+  "Decode a BECH32STRING into HRP and data."
+  (pcase (cl-position ?1 bech32string :from-end t)
+    ('nil (user-error "Bech32: no separating char"))
+    (0 (user-error "Bech32: no human readable part"))
+    ((and pos (guard (> pos (- (length bech32string) 7))))
+     (user-error "Bech32: Checksum missing"))
+    (pos (let ((hrp (downcase (substring bech32string 0 pos)))
+               (data
+                (mapcar (lambda (it) (cdr (assoc it bech32-reverse-charset)))
+                        (downcase (substring bech32string (1+ pos))))))
+           (bech32-valid-hrp hrp)
+           (unless (cl-every #'numberp data)
+             (user-error "Bech32: invalid data character"))
+           (if-let ((encoding (bech32-verify-checksum hrp data)))
+               (cons encoding (cons hrp (nbutlast data 6)))
+             (user-error "Invalid Checksum"))))))
+
 (defun bech32-decode (bech32string)
   "Decode a BECH32STRING into HRP and data."
-  (let* ((sections
-          (split-string (downcase bech32string) "1"))
-         (hrp (string-join (butlast sections) "1"))
-         (values
-          (--map (cdr (assoc it bech32-reverse-charset))
-                 (car (last sections)))))
-    (if (and (< 0 (length hrp))
-             (-every #'numberp values)
-             (< 5 (length values)) ;; At least checksum
-             (bech32-verify-checksum hrp values))
-        (cons hrp (bech32-tobase256 (nbutlast values 6)))
-      (user-error "Invalid Bech32 string"))))
+  (cl-destructuring-bind (_encoding hrp . data) (bech32--decode bech32string)
+    (cons hrp (bech32-tobase256 data))))
 
 (provide 'bech32)
 ;;; bech32.el ends here
