@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.1
+;; Version: 0.2.2
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
 ;;
@@ -61,7 +61,16 @@
 (defun cbor--get-ints (string &optional little)
   "Convert byte STRING to integer.
 Default to big-endian unless LITTLE is non-nil."
-  (seq-reduce (lambda (acc n) (logior n (ash acc 8))) (if little (nreverse string) string) 0))
+  (seq-reduce (lambda (acc n) (logior n (ash acc 8))) (if little (reverse string) string) 0))
+
+(defun cbor--luint (value size &optional little)
+  "Convert VALUE into list of SIZE bytes.
+Default to big endian unless LITTLE is non-nil."
+  (let ((bytes
+         (cl-loop for num = value then (ash num -8)
+                  repeat size
+                  collect (logand num #xff))))
+    (if little bytes (nreverse bytes))))
 
 (defun cbor--consume! (bytes)
   "Consume N BYTES from the source string."
@@ -159,30 +168,26 @@ Default to big-endian unless LITTLE is non-nil."
   (write-char
    (logior (ash major-type 5) additional-information)))
 
-(defun cbor--ints->bytelist (uint)
-  "Encode UINT into a list of bytes."
-  (let (stream)
-    (while (> uint 0)
-      (push (logand uint 255) stream)
-      (setq uint (ash uint -8)))
-    (cl-case (length stream)
-      ((1 2 4 8) stream)
-      ((3 7) (cons 0 stream))
-      (6 (append '(0 0) stream))
-      (5 (append '(0 0 0) stream))
-      (t (error "Interger to large to encode")))))
+(defun cbor-uint-needed-size (uint)
+  "Return standard required sized to store UINT up to 8 bytes."
+  (pcase (ceiling (log uint 255))
+    (1 1)
+    (2 2)
+    ((or 3 4) 4)
+    ((or 5 6 7 8) 8)
+    (_ (error "Interger to large to encode"))))
 
 (defun cbor--put-ints! (major-type uint)
   "Push to the out stream the defined MAJOR-TYPE with quantity UINT."
   (if (< uint 24)
       (cbor--put-initial-byte! major-type uint)
-    (let ((bytes (cbor--ints->bytelist uint)))
-      (pcase (length bytes)
+    (let ((size (cbor-uint-needed-size uint)))
+      (pcase size
         (1 (cbor--put-initial-byte! major-type 24))
         (2 (cbor--put-initial-byte! major-type 25))
         (4 (cbor--put-initial-byte! major-type 26))
         (8 (cbor--put-initial-byte! major-type 27)))
-      (mapc #'write-char bytes))))
+      (mapc #'write-char (cbor--luint uint size)))))
 
 (defun cbor--put-data-item! (value)
   "Encode Lisp VALUE into cbor list."
