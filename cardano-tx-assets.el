@@ -71,14 +71,13 @@ Token names are now hex encoded-make them readable."
 
 (defun cardano-tx-assets-flatten (value)
   "Return the flat list representation of VALUE."
-  (apply #'append
-         (mapcar (-lambda ((asset . quantity))
-                   (if (string= asset 'lovelace)
-                       (list quantity)
-                     (mapcar (-lambda ((tokenname . amount))
-                               (list amount asset tokenname))
-                             quantity)))
-                 value)))
+  (mapcan (-lambda ((asset . quantity))
+            (if (string= asset 'lovelace)
+                (list quantity)
+              (mapcar (-lambda ((tokenname . amount))
+                        (list amount asset tokenname))
+                      quantity)))
+          value))
 
 (defun cardano-tx-assets-merge-alists (function alist1 alist2)
   "Merge ALIST1 with ALIST2 using FUNCTION.
