@@ -258,6 +258,12 @@
     (cardano-tx--registration-cert
      '((registration . :null))))))
 
+(ert-deftest test-wallet-readable-number ()
+  (should (string= (cardano-wallet-readable-number 54) "54"))
+  (should (string= (cardano-wallet-readable-number 1986) "1986"))
+  (should (string= (cardano-wallet-readable-number 16348) "16_348"))
+  (should (string= (cardano-wallet-readable-number 1634869) "1_634_869")))
+
 (ert-deftest test-tx-balance ()
   (with-keyring
    (emacsql (cardano-tx-db) [:insert-or-ignore :into addresses [raw] :values $v1]
