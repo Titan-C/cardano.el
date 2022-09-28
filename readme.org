@@ -713,8 +713,8 @@ interesting by including the following code on your configuration file.
   (defun cardano-interesting-buffer (b)
     "Whether the current buffer's major-mode is a cardano mode."
     (with-current-buffer b
-      (memq major-mode '(cardano-db-addresses-mode
-                         cardano-db-files-mode
+      (memq major-mode '(cardano-tx-db-addresses-mode
+                         cardano-tx-db-files-mode
                          cardano-tx-mode
                          cardano-wallet-tx-log-mode)))))
 #+end_src
