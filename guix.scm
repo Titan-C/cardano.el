@@ -14,13 +14,13 @@
 (define-public cardano-wallet
   (package
    (name "cardano-wallet")
-   (version "2022-04-27")
+   (version "2022-08-16")
    (source (origin
             (method url-fetch)
-            (uri "https://hydra.iohk.io/build/14067440/download/1/cardano-wallet-v2022-04-27-linux64.tar.gz")
+            (uri "https://github.com/input-output-hk/cardano-wallet/releases/download/v2022-08-16/cardano-wallet-v2022-08-16-linux64.tar.gz")
             (sha256
              (base32
-              "0isdk01iwr0zcm7nzrhv94rwf4dy4m36m2rgyywg05vc2q69yggh"))))
+              "1vwd7n098grv495817dkhd9mq46ax9hl1mgb7vyimhf5rafjp5zl"))))
    (build-system copy-build-system)
    (arguments
     '(#:install-plan
