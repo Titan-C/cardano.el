@@ -347,7 +347,7 @@ It produces the actual policy-id from the MINT-ROWS."
          (tx-outs (cardano-tx-get-in input-data 'outputs))
          (build (seq-some (lambda (tx-out) (cardano-tx-get-in tx-out 'change)) tx-outs)))
     (mapc #'cardano-tx-save-datum tx-outs)
-    (list "transaction" (if build "build" "build-raw") "--alonzo-era"
+    (list "transaction" (if build "build" "build-raw") "--babbage-era"
           (->> 'inputs
                (cardano-tx-get-in input-data)
                (mapcar #'cardano-tx--in-args))
