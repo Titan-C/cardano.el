@@ -1,26 +1,28 @@
 #+TITLE: Cardano transaction editor
 * Motivation
-Interaction with the Cardano blockchain happens through transactions. Your
-wallet software takes care of the common user tasks, yet for advanced endeavors
-your need the =cardano-cli= which gets really cumbersome as transactions grow in
-complexity. Bash scripts tame the problem for a while, because Bash scripts
-automate repetitive tasks at the cost of flexibility. Yet, they are no solution,
-because you remain bound to the one dimensionality of the command line.  Despite
-editing those scripts on an editor you must mark line breaks, and keep track of
-quoting your variables and input.
+You interact with the Cardano blockchain through transactions. Your wallet
+software takes care of the common user tasks, yet for advanced endeavors you
+need the =cardano-cli=. However, it gets really cumbersome as transactions grow
+in complexity. Bash scripts tame the problem only for a while, because their
+limitation is the very thing they offer: Bash scripts automate repetitive tasks
+at the cost of flexibility.
 
 The command line is a great tool, yet if I ever write more than 4 words on the
 command line I go crazy. The command line is, for me, a tool for quick queries
 not a work environment. Bash scripts are good to automate simple things and keep
 dependencies low, however I also go crazy when maintaining large bash scripts.
+Bash scripts keep you bound to the one dimensionality of the command line.
+Despite editing those scripts on an editor you must mark line breaks, and keep
+track of quoting your variables and input.
 
 I want a tool that lets me craft my transactions, a powerful tool to interact
 with the =cardano-node=, which has all the features, does not get cumbersome as
 you increase the complexity of your tasks, and empowers you as a user.
 
 I couldn't find such a tool, thus I started building it myself. A text editable
-interface to create my transactions in Cardano. A tool that embraces the power
-of my text editor instead of the limitations of the command line.
+interface to create my transactions for the Cardano network. A tool that
+embraces the power of my text editor instead of the limitations of the command
+line.
 
 * Video Demos
 I host a YouTube Channel called [[https://www.youtube.com/channel/UCIGcTtEAq3aluoC5gRJjv5w/][Ars magna]] for my Cardano related projects. If
@@ -39,13 +41,6 @@ The videos are a show case of this project, yet as this project develops
 further, they naturally become obsolete. The documentation bellow is an up to
 date reference.
 
-** Support
-If you like this project, you can support further development through Catalyst.
-I'm currently working on 2 extensions and I ask for your support.
-
-- Support for post Vasil Hard-Fork features :: https://cardano.ideascale.com/c/idea/421674
-- Hardware wallet support :: https://cardano.ideascale.com/c/idea/420147
-
 * Word of caution
 This project is a running experiment and in Alpha stage. Don't rely on any of
 its functions or interfaces to be stable, because I'm still testing its user
@@ -57,15 +52,13 @@ offering you a declarative way to specify your transactions, without loosing
 fine grain control.
 
 This project has received support from the Cardano community, it is a Catalyst
-Fund 7 funded project and a Plutus Pioneer Capstone challenge prize winner.
+Fund 7 & 9 funded projects and is a Plutus Pioneer Capstone challenge prize
+winner.
 
 * Installation
 ** Dependencies
-*** Cardano Node 1.34.1
-You need a running Cardano node you can connect to.
-
-The easiest way to get one setup for the public testnet is using this repository:
-https://github.com/input-output-hk/testnet-summit-scripts
+*** Cardano Node >= 1.35.3
+You need a running Cardano node post Vasil Hard-Fork you can connect to.
 
 For Mainnet follow the standard guide
 https://docs.cardano.org/getting-started/installing-the-cardano-node
@@ -78,15 +71,6 @@ functionalities.
 
 *** Emacs 28
 This is the latest release. Install it and also the following packages.
-
-**** Required packages
-- dash
-- f
-- yaml
-- yaml-mode
-- yasnippet
-- helm
-- emacsql-sqlite3
 
 *** This package itself
 This package is on MELPA. If you use =use-package=, get it directly
@@ -240,10 +224,10 @@ You can also register cardano native simple scripts (multisigs/timelocks) and
 Plutus script files.
 
 To visualize the files registered in the database call the interactive function
-=cardano-tx-db-typed-files=. This open a table view of all registered files. You
-include annotations to each file. Annotations helps you identify in the future
-their content more than the filename. You can also open the files directly from
-this view.
+=cardano-tx-db-typed-files=. This opens a table view of all registered files.
+You may add annotations to each file. Annotations help you identify in the
+future their content more than the filename does. You can also open the files
+directly from this view.
 
 | Shortcut | Function                      | Description            |
 |----------+-------------------------------+------------------------|
