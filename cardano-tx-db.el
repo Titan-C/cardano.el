@@ -110,6 +110,27 @@ MONITOR the address if not nil."
             :values $v1]
            (vector nil address spend-id stake-id monitor (or note ""))))
 
+(defun cardano-tx-db-update-address-description (address description)
+  "Update in db for ADDRESS its DESCRIPTION."
+  (emacsql (cardano-tx-db)
+           [:insert :into addresses
+            [raw monitor note]
+            :values $v1
+            :on-conflict
+            :do-update
+            :set (= note $s2)]
+           (vector address t description)
+           description))
+
+(defun cardano-tx-db-save-address-description (address skip-terminating-len)
+  "Function to update in db for ADDRESS buffer content yet SKIP-TERMINATING-LEN."
+  (lambda ()
+    (interactive)
+    (thread-last (buffer-substring-no-properties (point-min) (- (point-max) skip-terminating-len))
+                 (string-trim)
+                 (cardano-tx-db-update-address-description address))
+    (kill-buffer)))
+
 (defun cardano-tx-db-address-toggle-watch ()
   "Toggle the watch flag for registered address."
   (interactive)
@@ -154,37 +175,30 @@ MONITOR the address if not nil."
   "Annotate data for ADDRESS."
   (interactive
    (list (aref (tabulated-list-get-entry) 1)))
-  (when-let ((result
-              (car
-               (emacsql (cardano-tx-db)
-                        [:select [raw note sp:type sp:description sp:path rw:type rw:description rw:path] :from addresses
-                         :left-join typed-files sp :on (= spend-key sp:id)
-                         :left-join typed-files rw :on (= stake-key rw:id)
-                         :where (= addresses:raw $s1)]
-                        address))))
+  (let ((result
+         (car
+          (emacsql (cardano-tx-db)
+                   [:select [raw note sp:type sp:description sp:path rw:type rw:description rw:path] :from addresses
+                    :left-join typed-files sp :on (= spend-key sp:id)
+                    :left-join typed-files rw :on (= stake-key rw:id)
+                    :where (= addresses:raw $s1)]
+                   address))))
     (with-current-buffer (generate-new-buffer "*Address Annotation*")
-      (setq-local header-line-format (format "Address: %s" (car result)))
+      (setq-local header-line-format (format "Address: %s" address))
       (org-mode)
-      (insert (cadr result) "\n")
-      (let ((cur (point)))
-        (apply #'cardano-tx-db-insert-file-annotation-block "Spending Condition" (seq-subseq result 2 5))
-        (apply #'cardano-tx-db-insert-file-annotation-block "Reward withdraw Condition" (seq-subseq result 5))
-        (add-text-properties cur (point-max) '(read-only t))
-        (goto-char cur)
-        (let ((description-length (- (point-max) cur)))
-          (use-local-map (copy-keymap org-mode-map))
-          (local-set-key "\C-c\C-c"
-                         (lambda ()
-                           (interactive)
-                           (emacsql (cardano-tx-db)
-                                    [:update addresses
-                                     :set (= note $s1)
-                                     :where (= raw $s2)]
-                                    (string-trim
-                                     (buffer-substring-no-properties (point-min)
-                                                                     (- (point-max) description-length)))
-                                    address)
-                           (kill-buffer)))))
+      (use-local-map (copy-keymap org-mode-map))
+      (when result
+        (insert (cadr result) "\n"))
+      (thread-last
+        (let ((cur (point)))
+          (when result
+            (apply #'cardano-tx-db-insert-file-annotation-block "Spending Condition" (seq-subseq result 2 5))
+            (apply #'cardano-tx-db-insert-file-annotation-block "Reward withdraw Condition" (seq-subseq result 5))
+            (add-text-properties cur (point-max) '(read-only t)))
+          (- (point-max) cur))
+        (cardano-tx-db-save-address-description address)
+        (local-set-key "\C-c\C-c"))
+      (goto-char (point-min))
       (switch-to-buffer (current-buffer)))))
 
 (defvar cardano-tx-db-addresses-mode-map
