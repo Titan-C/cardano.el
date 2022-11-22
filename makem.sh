@@ -388,22 +388,22 @@ function dirs-project {
 
 function files-project-elisp {
     # Echo list of Elisp files in project.
-    git ls-files 2>/dev/null \
-        | egrep "\.el$" \
-        | filter-files-exclude-default \
-        | filter-files-exclude-args
+    git ls-files 2>/dev/null |
+        grep -E "\.el$" |
+        filter-files-exclude-default |
+        filter-files-exclude-args
 }
 
 function files-project-feature {
     # Echo list of Elisp files that are not tests and provide a feature.
-    files-project-elisp \
-        | egrep -v "$test_files_regexp" \
-        | filter-files-feature
+    files-project-elisp |
+        grep -E -v "$test_files_regexp" |
+        filter-files-feature
 }
 
 function files-project-test {
     # Echo list of Elisp test files.
-    files-project-elisp | egrep "$test_files_regexp"
+    files-project-elisp | grep -E "$test_files_regexp"
 }
 
 function dirnames {
@@ -416,7 +416,7 @@ function dirnames {
 
 function filter-files-exclude-default {
     # Filter out paths (STDIN) which should be excluded by default.
-    egrep -v "(/\.cask/|-autoloads.el|.dir-locals)"
+    grep -E -v "(/\.cask/|-autoloads.el|.dir-locals)"
 }
 
 function filter-files-exclude-args {
@@ -440,17 +440,15 @@ function filter-files-exclude-args {
 
 function filter-files-feature {
     # Read paths on STDIN and echo ones that (provide 'a-feature).
-    while read path
-    do
-        egrep "^\\(provide '" "$path" &>/dev/null \
-            && echo "$path"
+    while read path; do
+        grep -E "^\\(provide '" "$path" &>/dev/null &&
+            echo "$path"
     done
 }
 
 function args-load-files {
     # For file in $@, echo "--load $file".
-    for file in "$@"
-    do
+    for file in "$@"; do
         sans_extension=${file%%.el}
         printf -- '--load %q ' "$sans_extension"
     done
@@ -513,17 +511,16 @@ function dependencies {
 
     # Search package headers.  Use -a so grep won't think that an Elisp file containing
     # control characters (rare, but sometimes necessary) is binary and refuse to search it.
-    egrep -a -i '^;; Package-Requires: ' $(files-project-feature) $(files-project-test) \
-        | egrep -o '\([^([:space:]][^)]*\)' \
-        | egrep -o '^[^[:space:])]+' \
-        | sed -r 's/\(//g' \
-        | egrep -v '^emacs$'  # Ignore Emacs version requirement.
+    grep -E -a -i '^;; Package-Requires: ' $(files-project-feature) $(files-project-test) |
+        grep -E -o '\([^([:space:]][^)]*\)' |
+        grep -E -o '^[^[:space:])]+' |
+        sed -r 's/\(//g' |
+        grep -E -v '^emacs$' # Ignore Emacs version requirement.
 
     # Search Cask file.
-    if [[ -r Cask ]]
-    then
-        egrep '\(depends-on "[^"]+"' Cask \
-            | sed -r -e 's/\(depends-on "([^"]+)".*/\1/g'
+    if [[ -r Cask ]]; then
+        grep -E '\(depends-on "[^"]+"' Cask |
+            sed -r -e 's/\(depends-on "([^"]+)".*/\1/g'
     fi
 
     # Search -pkg.el file.
