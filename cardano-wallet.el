@@ -171,11 +171,11 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet-sort-readable-number (column)
   "Generate a sort function for `tabulated-list' readable number at COLUMN."
-  (cl-flet ((value (lambda (entry)
-                     (thread-last
-                       (aref (cadr entry) column)
-                       (replace-regexp-in-string "_" "")
-                       (string-to-number)))))
+  (cl-flet ((value (entry)
+                   (thread-last
+                     (aref (cadr entry) column)
+                     (replace-regexp-in-string "_" "")
+                     (string-to-number))))
     (lambda (e1 e2) (> (value e1) (value e2)))))
 
 (defun cardano-wallet-print-col (value)
@@ -234,7 +234,7 @@ If JSON-DATA default to post unless METHOD is defined."
 (define-derived-mode cardano-wallet-balances-mode tabulated-list-mode "*Wallet Balances*"
   "Major mode for managing wallets."
   :interactive nil
-  (cl-flet ((sorter (lambda (col) (cardano-wallet-sort-readable-number col))))
+  (cl-flet ((sorter (col) (cardano-wallet-sort-readable-number col)))
     (setq tabulated-list-format `[("Name" 26 t)
                                   ("ID" 10 t)
                                   ("Total" 15 ,(sorter 2) :right-align t)
@@ -315,7 +315,7 @@ If JSON-DATA default to post unless METHOD is defined."
 (define-derived-mode cardano-wallet-tx-log-mode tabulated-list-mode "*Wallet Transaction Log*"
   "Major mode for working with addresses."
   :interactive nil
-  (cl-flet ((sorter (lambda (col) (cardano-wallet-sort-readable-number col))))
+  (cl-flet ((sorter (col) (cardano-wallet-sort-readable-number col)))
     (setq tabulated-list-format `[("Date" 20 t)
                                   ("Hash" 10 t)
                                   ("Fee" 13 ,(sorter 2) :right-align t)
