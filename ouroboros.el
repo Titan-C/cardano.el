@@ -96,14 +96,15 @@ Specify the NETWORK-MAGIC."
     (with-current-buffer receiving-buffer
       (erase-buffer)
       (set-buffer-multibyte nil))
-    (process-send-string
-     proc
-     (apply #'unibyte-string
-            (append
-             (cbor--luint time 4)
-             (cbor--luint msg-protocol 2)
-             (cbor--luint (length payload) 2)
-             (string-to-list payload))))))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (insert
+       (concat
+        (cbor--luint time 4)
+        (cbor--luint msg-protocol 2)
+        (cbor--luint (length payload) 2)))
+      (insert payload)
+      (process-send-region proc (point-min) (point-max)))))
 
 (defun ouroboros-collect-reply! ()
   "Filter for PROCESS CONTENT messages from server."

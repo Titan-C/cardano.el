@@ -632,8 +632,10 @@ The file =ouroboros.el= contains a simple implementation of [[https://hydra.iohk
 Networking Protocol]] to connect to the node and query information. You can use it
 for the local state query mini-protocol, for example:
 #+begin_src emacs-lisp
-(setq sock (ouroboros-connect "/home/titan/test-cardano/dev-vasil/bp-vasil.socket" 9))
-(ouroboros-local sock 'acquire 'tip)
+(progn
+  (setq sock (ouroboros-connect "path/to/cardano-node.socket" 2))
+  ;; After connection immediately engage in another mini protocol otherwise the server drops the connection
+  (ouroboros-local sock 'acquire 'tip))
 (ouroboros-local sock 'query 'chain-point)
 (ouroboros-local sock 'query 'block-no)
 (ouroboros-local sock 'query 'system-start)
