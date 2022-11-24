@@ -161,7 +161,11 @@ Default to big endian unless LITTLE is non-nil."
 ;; Encoding
 (defun cbor<-elisp (object)
   "Convert Emacs Lisp OBJECT into cbor encoded hex-string."
-  (with-output-to-string (cbor--put-data-item! object)))
+  (with-temp-buffer
+    (let ((standard-output (current-buffer)))
+      (set-buffer-multibyte nil)
+      (cbor--put-data-item! object))
+    (buffer-string)))
 
 (defun cbor--put-initial-byte! (major-type additional-information)
   "Encode and push the first byte giving MAJOR-TYPE and ADDITIONAL-INFORMATION."
