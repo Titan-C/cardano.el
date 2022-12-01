@@ -28,6 +28,7 @@
 (require 'f)
 (require 'bech32)
 (require 'cbor)
+(require 'hex-util)
 (require 'subr-x)
 (require 'cardano-tx-db)
 (require 'cardano-tx-utils)
@@ -188,10 +189,10 @@ Optionally define the STAKE-VKEY file."
                        (#b1111 "StakingScript")
                        (else (format "Else%s" else)))
                      'face 'font-lock-keyword-face)
-         (cbor-string->hexstring (concat (seq-subseq bt 0 28)))
+         (encode-hex-string (concat (seq-subseq bt 0 28)))
          (when (and (< (ash key -4) 4) (seq-subseq bt 28))
            (propertize "StakingCredential" 'face 'font-lock-keyword-face))
-         (cbor-string->hexstring (concat (seq-subseq bt 28))))
+         (encode-hex-string (concat (seq-subseq bt 28))))
         (string-join " ")
         string-trim)))
 
@@ -297,6 +298,7 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
 
 (defun cardano-tx-address--json-priv-key (xpriv-key pub-key type-name)
   "JSON string for an extended XPRIV-KEY with PUB-KEY of TYPE-NAME."
+  (cl-assert (and (arrayp xpriv-key) (arrayp pub-key)))
   (json-encode
    (list :type (concat type-name
                        "ExtendedSigningKeyShelley_ed25519_bip32")
@@ -304,18 +306,19 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
          :cborHex (-> (concat (seq-subseq xpriv-key 0 64)
                               pub-key
                               (seq-subseq xpriv-key 64))
-                      cbor-string->hexstring
+                      encode-hex-string
                       cbor<-elisp
-                      cbor-string->hexstring))))
+                      encode-hex-string))))
 
 (defun cardano-tx-address--json-pub-key (pub-key type-name)
   "JSON string for a PUB-KEY file of TYPE-NAME."
+  (cl-assert (arrayp pub-key))
   (json-encode
    (list :type (concat type-name
                        "VerificationKeyShelley_ed25519")
          :description (concat type-name " Verification Key")
-         :cborHex (-> pub-key cbor-string->hexstring
-                      cbor<-elisp cbor-string->hexstring))))
+         :cborHex (-> pub-key encode-hex-string
+                      cbor<-elisp encode-hex-string))))
 
 (defun cardano-tx-address-cli-keys (file-name)
   "Save `cardano-tx-cli' key-pairs labeled by FILE-NAME.
@@ -323,10 +326,10 @@ From extended key in `current-buffer'."
   (goto-char (point-min))
   (let ((type-name (if (looking-at "stake") "Stake" "Payment"))
         (xpriv-key
-         (-> (buffer-string) bech32-decode cdr))
+         (->> (buffer-string) bech32-decode cdr (apply #'unibyte-string)))
         (pub-key
          (progn (cardano-tx-address-public-key t)
-                (-> (buffer-string) bech32-decode cdr)))
+                (->> (buffer-string) bech32-decode cdr (apply #'unibyte-string))))
         (out-file-name (expand-file-name file-name cardano-tx-db-keyring-dir)))
     (let ((s-file (concat out-file-name ".skey"))
           (v-file (concat out-file-name".vkey")))

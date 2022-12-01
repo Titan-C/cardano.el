@@ -21,10 +21,10 @@
 (require 'cbor)
 (require 'bech32)
 
-(ert-deftest cbor-hexstring->ascii ()
-  (should (equal (cbor-hexstring->ascii "70617a") "paz"))
-  (should (equal (cbor-hexstring->ascii
-                  (cbor-string->hexstring "hello world!"))
+(ert-deftest decode-hex-string ()
+  (should (equal (decode-hex-string "70617a") "paz"))
+  (should (equal (decode-hex-string
+                  (encode-hex-string "hello world!"))
                  "hello world!")))
 
 (ert-deftest cbor-test-decoding ()
@@ -37,7 +37,7 @@
                    ("c2820502" . ,(cbor-tag-create :number 2 :content (vector 5 2)))
                    ("a303820208636c697306616105" . ((3 . [2 8]) ("lis" . 6) ("a" . 5)))))
     (should (equal (cbor->elisp input) expected))
-    (should (equal (cbor-string->hexstring (cbor<-elisp expected)) input))))
+    (should (equal (encode-hex-string (cbor<-elisp expected)) input))))
 
 (ert-deftest cbor-test-integer-unpacking ()
   (pcase-dolist (`(,input . ,expected) '(("A" . 65)

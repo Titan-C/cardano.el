@@ -284,7 +284,7 @@ Specify the NETWORK-MAGIC."
   (-let (([del rw] result))
     (mapcar (-lambda ((stk . poolid))
               (list (cons "address" stk)
-                    (cons "delegation" (bech32-encode "pool" (string-to-list (cbor-hexstring->ascii poolid))))
+                    (cons "delegation" (bech32-encode "pool" (string-to-list (decode-hex-string poolid))))
                     (cons "rewardAccountBalance" (cdr (assoc stk rw)))))
             del)))
 
@@ -326,7 +326,7 @@ Specify the NETWORK-MAGIC."
            (lambda (data)
              (vector
               (if (= 0 (car data)) 1 0) ;; flip back scripts to flag with 1
-              (-> data (cdr) (concat) (cbor-string->hexstring)))))
+              (-> data (cdr) (concat) (encode-hex-string)))))
    (cbor-tag-create
     :number 258
     :content)))
@@ -355,7 +355,7 @@ Specify the NETWORK-MAGIC."
                    (-> (bech32-decode address)
                        cdr
                        concat
-                       (cbor-string->hexstring)))
+                       (encode-hex-string)))
                  addresses)
                 #'ouroboros-addr-comp))))
 

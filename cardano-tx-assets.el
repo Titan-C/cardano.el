@@ -36,11 +36,11 @@
 Token names are now hex encoded-make them readable."
   (cond ((vectorp tokens)
          (seq-map (-lambda ([tk amount])
-                    (cons (cbor-hexstring->ascii tk) amount))
+                    (cons (decode-hex-string tk) amount))
                   tokens))
         ((consp tokens)
          (seq-map (-lambda ((tk . amount))
-                    (cons (cbor-hexstring->ascii tk) amount))
+                    (cons (decode-hex-string tk) amount))
                   tokens))
         (t (error "Unexpected token Bundle: %S" tokens))))
 
@@ -65,7 +65,7 @@ Token names are now hex encoded-make them readable."
                 (cons asset quantity)
               (cons asset
                     (mapcar (-lambda ((tokenname . amount))
-                              (cons (cbor-string->hexstring tokenname) amount))
+                              (cons (encode-hex-string tokenname) amount))
                             quantity))))
           value))
 

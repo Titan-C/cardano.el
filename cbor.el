@@ -35,24 +35,11 @@
 ;;
 ;;; Code:
 
+(require 'hex-util)
 (require 'cl-lib)
 (require 'dash)
 (require 'json)
 (require 'seq)
-
-(defun cbor-hexstring->ascii (hex-string)
-  "Convert HEX-STRING into ASCII string."
-  (->> (string-to-list hex-string)
-       (-partition 2)
-       (--map (string-to-number (concat it) 16))
-       (apply #'unibyte-string)))
-
-(defun cbor-string->hexstring (s)
-  "Encode the string S into a hex string."
-  (mapconcat
-   (lambda (it) (format "%02x" it))
-   s
-   ""))
 
 (cl-defstruct (cbor-tag (:constructor cbor-tag-create)
                         (:copier nil))
@@ -126,7 +113,7 @@ Default to big endian unless LITTLE is non-nil."
       ;; negative integer
       (1 (- -1 argument))
       ;; bytestring are hex encoded
-      (2 (cbor-string->hexstring (cbor--consume! argument)))
+      (2 (encode-hex-string (cbor--consume! argument)))
       ;; Text strings
       (3 (cbor--consume! argument))
       ;; array of data
@@ -153,7 +140,7 @@ Default to big endian unless LITTLE is non-nil."
     (set-buffer-multibyte nil)
     (insert (if (and (zerop (mod (length byte-or-hex-string) 2))
                      (cbor-hex-p byte-or-hex-string))
-                (cbor-hexstring->ascii byte-or-hex-string)
+                (decode-hex-string byte-or-hex-string)
               byte-or-hex-string))
     (goto-char (point-min))
     (cbor--get-data-item!)))
@@ -203,7 +190,7 @@ Default to big endian unless LITTLE is non-nil."
    ;; bytestring are hex encoded
    ((and (stringp value) (zerop (mod (length value) 2)) (cbor-hex-p value))
     (let ((rev-list
-           (cbor-hexstring->ascii value)))
+           (decode-hex-string value)))
       (cbor--put-ints! 2 (length rev-list))
       (mapc #'write-char (string-to-list rev-list))))
 

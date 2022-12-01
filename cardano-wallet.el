@@ -30,6 +30,7 @@
 ;; Provide an interface to the cardano-wallet service
 ;;; Code:
 
+(require 'hex-util)
 (require 'url)
 (require 'yaml)
 (require 'dash)
@@ -441,7 +442,7 @@ If JSON-DATA default to post unless METHOD is defined."
           (cl-map 'vector
                   (-lambda ((amount policy tokenname))
                     (list :policy_id policy
-                          :asset_name (cbor-string->hexstring tokenname)
+                          :asset_name (encode-hex-string tokenname)
                           :quantity amount)))))))
 
 (defun cardano-wallet-tx-new (wallet)
@@ -467,7 +468,7 @@ If JSON-DATA default to post unless METHOD is defined."
         (concat "      " ;; ident
                 (cardano-tx-get-in it "policy_id")
                 ":\n        "
-                (let ((assetname (cbor-hexstring->ascii
+                (let ((assetname (decode-hex-string
                                   (cardano-tx-get-in it "asset_name"))))
                   (if (cardano-tx-nw-p assetname) assetname "\"\"")) ": "
                 (number-to-string

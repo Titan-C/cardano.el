@@ -202,7 +202,7 @@ All the wallet address-file pairs in the keyring are tested."
   (-> (--map (if (numberp it)
                  (number-to-string it)
                (-let (((amount policy tokenname) it))
-                 (format "%d %s.%s" amount policy (cbor-string->hexstring tokenname))))
+                 (format "%d %s.%s" amount policy (encode-hex-string tokenname))))
              (cardano-tx-assets-flatten value))
       (sort #'string>) ;; Sorting for lovelace amount first
       (string-join "+")))
