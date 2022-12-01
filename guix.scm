@@ -46,7 +46,7 @@
    (propagated-inputs
     (list emacs-dash emacs-yaml-mode emacs-yaml
           emacs-yasnippet emacs-helm emacs-f
-          emacs-emacsql emacs-emacsql-sqlite3))
+          emacs-emacsql))
    (home-page "https://github.com/Titan-C/cardano.el")
    (synopsis "An emacs interface to Cardano")
    (description "Wrapping Cardano cli tools")

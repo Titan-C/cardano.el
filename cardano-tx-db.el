@@ -30,7 +30,7 @@
 (require 'dash)
 (require 'yaml)
 (require 'emacsql)
-(require 'emacsql-sqlite3)
+(require 'emacsql-sqlite)
 (require 'subr-x)
 (require 'json)
 (require 'cardano-tx-utils)
@@ -40,7 +40,9 @@
   :type 'directory
   :group 'cardano-tx)
 
-(defconst cardano-tx-db-version 0)
+(defvar cardano-tx-db-connection nil)
+
+(defconst cardano-tx-db-version 1)
 
 (defconst cardano-tx-db--table-schema
   '((data
@@ -52,24 +54,64 @@
     (tx-annotation
      [(txid :unique :primary-key) annotation])))
 
-(defvar cardano-tx-db-connection nil)
+(defun cardano-tx-db--user-version (db)
+  "Return current user version."
+  (caar (emacsql db [:pragma user-version])))
+
+(defun cardano-tx-db--set-user-version (db version)
+  "Return to DB user VERSION."
+  (emacsql db [:pragma (= user-version $s1)] version))
+
+(defun cardano-tx-db--backup (annotation)
+  "Copy current database as snapshot naming ANNOTATION."
+  (let* ((db-name (slot-value cardano-tx-db-connection 'file))
+         (snapshot-name
+          (format "%s-%s-%s.db"
+                  (file-name-sans-extension db-name)
+                  annotation
+                  (format-time-string "%Y-%m-%dT%T"))))
+    (message "Backing up %s %s" db-name snapshot-name)
+    (emacsql-close cardano-tx-db-connection)
+    (sleep-for 0 5) ;; wait for close
+    (copy-file db-name snapshot-name)
+    ;; reconnect
+    (setq cardano-tx-db-connection (emacsql-sqlite db-name))))
+
+(defun cardano-tx-db--update (db version)
+  "Update the database DB from VERSION to latest."
+  (when (= version 0)
+    (emacsql-with-transaction db
+      (message "Upgrade from v0 to v1")
+      (emacsql db [:create-table master-keys $S1]
+               [(id integer :not-null :primary-key)
+                fingerprint
+                encrypted
+                data
+                note])
+      (cardano-tx-db--set-user-version db (setq version 1)))))
 
 (defun cardano-tx-db--init (db)
   "Initiate tables on database DB."
   (emacsql-with-transaction db
     (pcase-dolist (`(,table ,schema) cardano-tx-db--table-schema)
       (emacsql db [:create-table :if-not-exists $i1 $S2] table schema))
-    (emacsql db (format "PRAGMA user_version = %s" cardano-tx-db-version))))
+    (cardano-tx-db--set-user-version db 0))
+  (cardano-tx-db--update db 0))
 
 (defun cardano-tx-db ()
   "Retrieve active database."
   (unless (and cardano-tx-db-connection (emacsql-live-p cardano-tx-db-connection))
     (let* ((db-path (expand-file-name "cardano.db" cardano-tx-db-keyring-dir))
-           (connection (emacsql-sqlite3 db-path)))
+           (connection (emacsql-sqlite db-path)))
       (condition-case nil
           (emacsql connection [:select * :from typed-files])
         (emacsql-error (cardano-tx-db--init connection)))
       (setq cardano-tx-db-connection connection)
+      (let ((version (cardano-tx-db--user-version connection)))
+        (when (< version cardano-tx-db-version)
+          (message "Database needs update doing a backup first")
+          (-> (cardano-tx-db--backup (format "backup-v%d" version))
+              (cardano-tx-db--update version))))
       (cardano-tx-db-utxo-reset)))
   cardano-tx-db-connection)
 

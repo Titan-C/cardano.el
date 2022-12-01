@@ -18,10 +18,11 @@
 (require 'bech32)
 (require 'f)
 (require 'emacsql)
-(require 'emacsql-sqlite3)
+(require 'emacsql-sqlite)
 (require 'cardano-tx-address)
 (require 'cardano-tx-assets)
 (require 'cardano-tx)
+(require 'cardano-tx-db)
 (require 'cardano-tx-utils)
 (require 'cardano-wallet)
 (require 'ert)
@@ -36,13 +37,18 @@
   "Fixture to execute BODY with address keyring temporary dir."
   `(let ((cardano-tx-db-keyring-dir (make-temp-file "test-addr" t)))
      (when (and cardano-tx-db-connection (emacsql-live-p cardano-tx-db-connection))
-       (emacsql-close cardano-tx-db-connection))
+       (emacsql-close cardano-tx-db-connection)
+       (sleep-for 0 5))  ;; wait for close
      (unwind-protect
          (progn ,@body)
        (emacsql-close cardano-tx-db-connection)
        (sleep-for 0 1)  ;; wait for close
        (setq cardano-tx-db-connection nil)
        (delete-directory cardano-tx-db-keyring-dir t))))
+
+(ert-deftest test-db-init ()
+  (with-keyring
+   (should (= 1 (cardano-tx-db--user-version (cardano-tx-db))))))
 
 (ert-deftest address-new-keys ()
   (with-keyring
