@@ -196,7 +196,7 @@ Optionally define the STAKE-VKEY file."
         (string-join " ")
         string-trim)))
 
-(defun cardano-tx-address-build (spend-type spend-hash reward-type reward-hash &optional network-id)
+(defun cardano-tx-address-build (spend-type spend-hash &optional network-id reward-type reward-hash)
   "Build a bech32 Shelley address.
 
 SPEND-TYPE and REWARD-TYPE are either nil, keyhash, script.
@@ -244,13 +244,8 @@ PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
                (t ""))
               (split-string it (rx (or whitespace "/" "_")))
               (cl-remove-if-not #'cardano-tx-nw-p it))))
-    (when (--every (string-match-p (rx bol (1+ digit) (optional "H") eol) it) split-path)
-      (mapcar
-       (lambda (entry)
-         (if (string-suffix-p "H" entry)
-             (intern entry)
-           (string-to-number entry)))
-       split-path))))
+    (when (and split-path (--every (string-match-p (rx bol (1+ digit) (optional "H") eol) it) split-path))
+      (string-join split-path "/"))))
 
 (defun cardano-tx-address-gen-recovery-phrase (size)
   "Create the recovery phrase of SIZE words for HD wallet.
@@ -284,10 +279,8 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
   (cardano-tx-address-piped "key" "from-recovery-phrase" "Shelley"))
 
 (defun cardano-tx-address-derive-child (path)
-  "Piped from buffer derive PATH from extended key."
-  (cardano-tx-address-piped "key" "child"
-                            (cardano-tx-address-path->str
-                             (cardano-tx-address--validate-hd-path path))))
+  "Piped from buffer derive PATH in str specification from extended key."
+  (cardano-tx-address-piped "key" "child" path))
 
 (defun cardano-tx-address-public-key (&optional without-chain-code)
   "Piped from buffer extract the public key optionally WITHOUT-CHAIN-CODE."
@@ -295,6 +288,7 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
                             (if without-chain-code
                                 "--without-chain-code"
                               "--with-chain-code")))
+
 
 (defun cardano-tx-address--json-priv-key (xpriv-key pub-key type-name)
   "JSON string for an extended XPRIV-KEY with PUB-KEY of TYPE-NAME."
@@ -346,14 +340,15 @@ From extended key in `current-buffer'."
         (cardano-tx-log 'info "Created new key pair: %S" file-name))
       (list v-file s-file))))
 
-(defun cardano-tx-address-new-hd-key (named-path)
-  "Create new HD key-pair at NAMED-PATH from wallet recovery phrase."
+(defun cardano-tx-address-new-hd-key (path-str)
+  "Create new HD key-pair at PATH-STR from wallet recovery phrase."
   (with-temp-buffer
     (insert-file-contents
      (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
     (cardano-tx-address-master-key-from-phrase)
-    (cardano-tx-address-derive-child named-path)
-    (cardano-tx-address-cli-keys named-path)))
+    (cardano-tx-address-derive-child path-str)
+    (cardano-tx-address-cli-keys
+     (replace-regexp-in-string "/" "_" path-str))))
 
 (defun cardano-tx-address-new-hd-key-files (&rest paths)
   "Generate the key pairs for HD derivation PATHS."
@@ -361,10 +356,39 @@ From extended key in `current-buffer'."
    (split-string (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
   (cardano-tx-db-load-files
    (mapcan (lambda (path)
-             (when-let ((path (cardano-tx-address--validate-hd-path path))
-                        (named-path (cardano-tx-address-path->str path "_")))
-               (cardano-tx-address-new-hd-key named-path)))
+             (when-let ((path (cardano-tx-address--validate-hd-path path)))
+               (cardano-tx-address-new-hd-key path)))
            paths)))
+
+;; Derive account addresses
+;;
+
+(cardano-tx-address--validate-hd-path "14H/156")
+(defun cardano-tx-address--root-key ()
+  (with-temp-buffer
+    (insert-file-contents
+     (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
+    (cardano-tx-address-master-key-from-phrase)
+    (buffer-string)))
+
+(defun cardano-tx-address-derive-public-key-hash (root path)
+  (with-temp-buffer
+    (insert root)
+    (cardano-tx-address-derive-child path)
+    (when (search-backward "_xsk1" nil t)
+      (cardano-tx-address-public-key t))
+    (cardano-tx-address-piped "key" "hash")
+    (cdr (bech32-decode (buffer-string)))))
+
+(defun cardano-tx-address-hd-addr (root &optional network-id with-stake)
+  "From bech32 ROOT extended key calculate address.
+NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
+WITH-STAKE is a delegation specification."
+  (lambda (path)
+    (apply #'cardano-tx-address-build
+           'keyhash (vconcat (cardano-tx-address-derive-public-key-hash root path))
+           network-id
+           with-stake)))
 
 (provide 'cardano-tx-address)
 ;;; cardano-tx-address.el ends here

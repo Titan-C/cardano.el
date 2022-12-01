@@ -90,15 +90,15 @@
 
 (ert-deftest address-validate-hd-path ()
   (pcase-dolist (`(,input ,result)
-                 '(("5H" (5H))
-                   ("5/2H/8" (5 2H 8))
-                   ("5 2h_8" (5 2H 8))
-                   ("5/2'_8" (5 2H 8))
+                 '(("5H" "5H")
+                   ("5/2H/8" "5/2H/8")
+                   ("5 2h_8" "5/2H/8")
+                   ("5/2'_8" "5/2H/8")
                    ("PA" nil)
                    ("" nil)
                    (5 nil)
-                   ((4 5h 2) (4 5H 2))
-                   ((4 5H 2) (4 5H 2))))
+                   ((4 5h 2) "4/5H/2")
+                   ((4 5H 2) "4/5H/2")))
     (should (equal (cardano-tx-address--validate-hd-path input) result))))
 
 (ert-deftest address-new-script ()
@@ -122,7 +122,7 @@
                    (nil     nil  script  "LQ" 2 "stake17fx9zpctvfz" #b11110010)
                    (nil     nil  keyhash "LQ" 3 "stake1udx9zlrdnxa" #b11100011)))
     (should (equal (cardano-tx-address-build
-                    spend-type spend-hash reward-type reward-hash network-id)
+                    spend-type spend-hash network-id reward-type reward-hash)
                    address))
     (should (equal (cadr (bech32-decode address)) header))))
 
