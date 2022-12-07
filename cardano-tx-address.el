@@ -247,6 +247,20 @@ PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
     (when (and split-path (--every (string-match-p (rx bol (1+ digit) (optional "H") eol) it) split-path))
       (string-join split-path "/"))))
 
+(defun cardano-tx-address--db-load-master-key (key-source)
+  (when-let ((root
+              (cond
+               ((file-exists-p key-source) (with-temp-buffer
+                                             (insert-file-contents key-source)
+                                             (cardano-tx-address-master-key-from-phrase)
+                                             (buffer-string)))
+               ((ignore-error user-error (bech32-decode key-source)) key-source))))
+    (emacsql (cardano-tx-db)
+             [:insert-or-ignore :into master-keys
+              [fingerprint encrypted data]
+              :values $v1]
+             (vector (cardano-tx-address-fingerprint root) nil root))))
+
 (defun cardano-tx-address-gen-recovery-phrase (size)
   "Create the recovery phrase of SIZE words for HD wallet.
 Save it unencrypted on `cardano-tx-db-keyring-dir'."
