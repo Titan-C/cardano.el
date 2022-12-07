@@ -25,6 +25,8 @@
 ;;
 ;;; Code:
 
+(require 'hex-util)
+(require 'seq)
 (require 'cardano-tx-log)
 (require 'cardano-tx-address)
 
@@ -34,71 +36,113 @@
   :group 'cardano)
 
 (defun cardano-tx-hw (&rest args)
+  "Call hardware wallet service cli with ARGS."
   (cardano-tx-log 'debug "%s %s" cardano-tx-hw-command (mapconcat #'prin1-to-string args " "))
   (with-temp-buffer
-    (apply #'call-process cardano-tx-hw-command nil t nil args)
-    (goto-char (point-min))
-    (buffer-string)))
+    (cardano-tx-hw-reply
+     (apply #'call-process cardano-tx-hw-command nil t nil args))))
 
-(setq hw-keys
-      (cardano-tx-hw "pubkey" "query"
-                     "--path" "1852H/1815H/0H"
-                     "--path" "1852H/1815H/1H"
-                     "--path" "1852H/1815H/2H"))
+(defun cardano-tx-hw-reply (result)
+  "Process the RESULT value from an external process and the `current-buffer'."
+  (if (= result 0)
+      (json-parse-string (buffer-string))
+    (let ((err-msg (buffer-string)))
+      (cardano-tx-log 'error err-msg)
+      (error err-msg))))
 
-
-(with-current-buffer (get-buffer-create "*test*")
-  (erase-buffer)
-  (insert hw-keys)
-  (goto-char (point-min))
-  (while (search-forward "'" nil t)
-    (replace-match "\""))
-  (goto-char (point-min))
+(defun cardano-tx-hw--parse-extended-pubkeys (import-pubkey-list)
+  "Prepare IMPORT-PUBKEY-LIST from HW device response for database ingestion."
   (seq-map
-   (-lambda ([path extkey])
-     (let* ((main-key (->> (cbor-hexstring->ascii extkey)
-                           (string-to-list)
-                           (bech32-encode "acct_xvk")))
-            (stake
-             (with-temp-buffer
-               (insert main-key)
-               (cardano-tx-address-derive-child "2/0")
-               (buffer-string))))
-       (with-temp-buffer
-         (insert main-key)
-         (cardano-tx-address-derive-child "0/0")
-         (cardano-tx-address-piped "address" "payment" "--network-tag" "preview")
-         (cardano-tx-address-piped "address" "delegation" stake)
-         (buffer-string))))
-   (json-parse-buffer))
-  )
+   (lambda (row)
+     (seq-let (path extended-pubkey) row
+       (let ((root (bech32-encode "acct_xvk" (decode-hex-string extended-pubkey))))
+         (vector
+          (cardano-tx-address-fingerprint root)
+          (concat "HW" (cardano-tx-hw-bip32->path-str path))
+          root))))
+   import-pubkey-list))
 
-(with-temp-buffer
-  (insert-file-contents
-   (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
-  (cardano-tx-address-master-key-from-phrase)
-  (cardano-tx-address-derive-child "1852H/1815H/0H")
-  (cardano-tx-address-public-key )
-  (->
-   (buffer-string)
-   ;; bech32-decode
-   ;; cdr length
-   )
-  )
+(defun cardano-tx-hw-request-extended-pubkeys (path-spec)
+  "Request extended public keys along expandable PATH-SPEC from hardware device.
+Extended public keys are stored directly on the database as master-keys."
+  (interactive
+   (list (read-string "Derivation path (2..4 for ranges): " "1852H/1815H/0H")))
+  (thread-last
+    (cardano-tx-hw-expand-derivation-paths path-spec)
+    (mapcan (lambda (path) (list "--path" path)))
+    (apply #'cardano-tx-hw "pubkey" "query")
+    (cardano-tx-hw--parse-extended-pubkeys)
+    (emacsql (cardano-tx-db)
+             [:insert-or-ignore :into master-keys
+              [fingerprint note data]
+              :values $v1])))
 
-(defun cardano-tx-hw-bip32-path (path)
-  "Turn into integer sequence from string PATH."
-  (mapcar (lambda (entry)
-            (let* ((entry (symbol-name entry))
-                   (hardened? (string-suffix-p "H" entry)))
-              (->
-               (if hardened? (substring entry 0 -1) entry)
-               (string-to-number)
-               (logxor (ash (if hardened? 1 0) 31)))))
-          (cardano-tx-address--validate-hd-path path)))
+(defun cardano-tx-hw--master-keys ()
+  "Completing read to pick one of the loaded master keys."
+  (let* ((accounts (emacsql (cardano-tx-db) [:select [id fingerprint note data] :from master-keys]))
+         (select-accounts (mapcar
+                           (lambda (row)
+                             (seq-let (_ fingerprint note) row
+                               (cons (concat (propertize fingerprint 'face 'font-lock-builtin-face) " " note)
+                                     row)))
+                           accounts))
+         (pick (completing-read "Derive from key: " select-accounts)))
+    (assoc pick select-accounts)))
 
-(cardano-tx-hw-bip32-path "1852H/1815H/0H")
+(defun cardano-tx-hw-bip32<-path-str (path)
+  "Turn into BIP32 integer sequence from string PATH."
+  (thread-last
+    (split-string (cardano-tx-address--validate-hd-path path) "/")
+    (mapcar (lambda (entry)
+              (if (string-suffix-p "H" entry) ;; Hardened is symbol
+                  (-> entry
+                      (substring  0 -1)
+                      (string-to-number)
+                      (logxor (ash 1 31)))
+                (string-to-number entry))))))
 
+(defun cardano-tx-hw-bip32->path-str (path)
+  "Convert from BIP32 integer sequence to readable string PATH."
+  (let ((hard-i (ash 1 31)))
+    (mapconcat (lambda (idx)
+                 (if (< 0(logand idx hard-i))
+                     (format "%dH" (logxor idx hard-i))
+                   (format "%d" idx)))
+               path "/")))
+
+(defun cardano-tx-hw--parse-index (idx)
+  "Parse indexes for derivation.
+IDX can be a single integer string or a range a..b.
+In both cases can be sufixed with H for hardened.
+Returns BIP32 integer list."
+  (let ((numbers (pcase idx
+                   ((and n (rx bol (1+ digit) (? "H") eol)) (list (string-to-number n)))
+                   ((and range (rx (group (1+ digit)) ".." (group (1+ digit))))
+                    (number-sequence (string-to-number (match-string 1 range)) (string-to-number (match-string 2 range)))))))
+    (if (string-suffix-p  "H" idx)
+        (mapcar (lambda (x) (+ x (ash 1 31))) numbers) numbers)))
+
+(defun cardano-tx-hw--parse-derivation-path (path-spec)
+  (mapcar #'cardano-tx-hw--parse-index
+          (split-string path-spec "/" t)))
+
+(defun cardano-tx-hw-expand-derivation-paths (path-spec)
+  (let ((index-specs (nreverse (cardano-tx-hw--parse-derivation-path path-spec))))
+    (thread-last
+      (seq-reduce
+       (lambda (paths indexes)
+         (mapcan
+          (lambda (idx)
+            (if (null paths)
+                (list idx)
+              (mapcar (lambda (path)
+                        (if (listp path)
+                            (cons idx path)
+                          (list idx path)))
+                      paths)))
+          indexes))
+       index-specs nil)
+      (mapcar #'cardano-tx-hw-bip32->path-str))))
 
 (provide 'cardano-tx-hw)
 ;;; cardano-tx-hw.el ends here
