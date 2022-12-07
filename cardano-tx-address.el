@@ -423,17 +423,23 @@ NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
 ACCOUNT-PATTERN is a SQL pattern to match the account. Defaults to [%]%"
   (thread-last
     (emacsql (cardano-tx-db)
-             [:select [pay:description pay:cbor-hex stake:description stake:cbor-hex]
+             [:select [pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex]
               :from typed-files pay
               :join typed-files stake
               :where (and (like pay:type "Payment%") (like pay:description $s1)
                           (like stake:type "Stake%") (like stake:description $s1))]
              (or account-pattern "[%]%"))
     (mapcar (lambda (row)
-              (cardano-tx-address-build 'keyhash
-                                        (cardano-tx-address-hash (cadr row)) network-id
-                                        'keyhash
-                                        (cardano-tx-address-hash (cadddr row)))))))
+              (seq-let (pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex) row
+                (vector nil
+                 (cardano-tx-address-build 'keyhash
+                                           (cardano-tx-address-hash pay:cbor-hex) network-id
+                                           'keyhash
+                                           (cardano-tx-address-hash stake:cbor-hex))
+                 pay:id stake:id nil
+                 (format "spend: %s -- reward: %s" pay:description stake:description)))))
+    (emacsql (cardano-tx-db)
+             [:insert-or-ignore :into addresses :values $v1])))
 
 (provide 'cardano-tx-address)
 ;;; cardano-tx-address.el ends here
