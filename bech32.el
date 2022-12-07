@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.0
+;; Version: 0.2.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "26.1"))
 ;;
@@ -34,6 +34,7 @@
 ;;
 ;;; Code:
 
+(require 'seq)
 (require 'cl-lib)
 (require 'subr-x)
 
@@ -97,7 +98,7 @@ of elements bounded by 2^TOBITS.  PADDING is applied."
         (bits 0)
         (maxv (- (ash 1 tobits) 1))
         result)
-    (dolist (value data)
+    (seq-doseq (value data)
       (setq acc (logior value (ash acc frombits)))
       (cl-incf bits frombits)
       (while (>= bits tobits)

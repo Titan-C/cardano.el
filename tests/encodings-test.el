@@ -59,6 +59,12 @@
       (should (eq encoding 'bech32))
       (should (equal (downcase test) (bech32--encode 'bech32 hrp data))))))
 
+(ert-deftest bech32-encode-multiinput ()
+  (dolist (empty-seq '(nil "" []))
+    (should (string= (bech32-encode "a" empty-seq) "a12uel5l")))
+  (dolist (data (list "hello" (string-to-list "hello") (vconcat (string-to-list "hello"))))
+    (should (string= (bech32-encode "test?" data) "test?1dpjkcmr0f9cjl4"))))
+
 (ert-deftest bech32-fails ()
   (dolist (test '(" 1nwldj5"
                   (format "%c1axkwrx" #x7f)
