@@ -265,6 +265,9 @@ MONITOR the address if not nil."
                                ("Address" 20 t)
                                ("cksum" 9 t)
                                ("Note" 0 nil)])
+  (setq font-lock-defaults `(((,(rx "NO") . font-lock-comment-face)
+                              (,(rx (or "spend:" "reward:") ) . font-lock-string-face)
+                              (,(rx "[" (= 8 hex) "]" ) . font-lock-builtin-face))))
   (tabulated-list-init-header))
 
 (defun cardano-tx-db-addresses ()
