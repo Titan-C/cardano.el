@@ -363,32 +363,77 @@ From extended key in `current-buffer'."
 ;; Derive account addresses
 ;;
 
-(cardano-tx-address--validate-hd-path "14H/156")
-(defun cardano-tx-address--root-key ()
-  (with-temp-buffer
-    (insert-file-contents
-     (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
-    (cardano-tx-address-master-key-from-phrase)
-    (buffer-string)))
-
-(defun cardano-tx-address-derive-public-key-hash (root path)
+(defun cardano-tx-address-derive-public-key (root path)
   (with-temp-buffer
     (insert root)
     (cardano-tx-address-derive-child path)
     (when (search-backward "_xsk1" nil t)
       (cardano-tx-address-public-key t))
-    (cardano-tx-address-piped "key" "hash")
     (cdr (bech32-decode (buffer-string)))))
 
-(defun cardano-tx-address-hd-addr (root &optional network-id with-stake)
-  "From bech32 ROOT extended key calculate address.
+(defun cardano-tx-address-blake2-sum (string-or-buffer &optional size)
+  "Calculate blake2 checksum for STRING-OR-BUFFER.
+Output SIZE in bits, default 224. Return as hexstring."
+  (let ((size (or size 224)))
+    (with-temp-buffer
+      (set-buffer-multibyte nil)
+      (cond
+       ((stringp string-or-buffer) (insert string-or-buffer))
+       ((bufferp string-or-buffer) (insert-buffer-substring string-or-buffer))
+       (t (error "Wrong type")))
+      (call-process-region (point-min) (point-max) "b2sum" t t nil "-l" (number-to-string size) "-b")
+      (buffer-substring-no-properties 1 (1+ (/ size 4))))))
+
+
+(defun cardano-tx-address-hash (cbor-hex)
+  "Calculate blake2 hash of CBOR-HEX."
+  (decode-hex-string
+   (cardano-tx-address-blake2-sum
+    (decode-hex-string
+     (cbor->elisp cbor-hex)))))
+
+(defun cardano-tx-address-fingerprint (bech32-string)
+  "First 4 bytes of sha256sum in hex for BECH32-STRING values."
+  (substring (secure-hash 'sha256 (concat (cdr (bech32-decode bech32-string)))) 0 8 ))
+
+(defun cardano-tx-address-hd-db-register-vkeys (master-key derivations)
+  (let ((fingerprint (cardano-tx-address-fingerprint master-key)))
+    (thread-last
+      derivations
+      (mapcar (lambda (it)
+                (vector (if (string-suffix-p "2/0" it)
+                            "StakeVerificationKeyShelley_ed25519"
+                          "PaymentVerificationKeyShelley_ed25519")
+                        (format "[%s]%s" fingerprint it)
+                        (thread-first
+                          (apply #'unibyte-string (cardano-tx-address-derive-public-key master-key it))
+                          (encode-hex-string)
+                          (cbor<-elisp)
+                          (encode-hex-string)))))
+      (emacsql (cardano-tx-db)
+               [:insert-or-ignore
+                :into typed_files
+                [type description cbor_hex]
+                :values $v1]))))
+
+(defun cardano-tx-address-hd-addresses (&optional network-id account-pattern)
+  "Gather all Hierarchical deterministic addresses.
+
 NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
-WITH-STAKE is a delegation specification."
-  (lambda (path)
-    (apply #'cardano-tx-address-build
-           'keyhash (vconcat (cardano-tx-address-derive-public-key-hash root path))
-           network-id
-           with-stake)))
+ACCOUNT-PATTERN is a SQL pattern to match the account. Defaults to [%]%"
+  (thread-last
+    (emacsql (cardano-tx-db)
+             [:select [pay:description pay:cbor-hex stake:description stake:cbor-hex]
+              :from typed-files pay
+              :join typed-files stake
+              :where (and (like pay:type "Payment%") (like pay:description $s1)
+                          (like stake:type "Stake%") (like stake:description $s1))]
+             (or account-pattern "[%]%"))
+    (mapcar (lambda (row)
+              (cardano-tx-address-build 'keyhash
+                                        (cardano-tx-address-hash (cadr row)) network-id
+                                        'keyhash
+                                        (cardano-tx-address-hash (cadddr row)))))))
 
 (provide 'cardano-tx-address)
 ;;; cardano-tx-address.el ends here
