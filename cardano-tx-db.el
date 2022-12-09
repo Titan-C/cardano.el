@@ -296,7 +296,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
   (-some-> (cardano-tx-db-file file-id) (elt 2) (find-file)))
 
 (defun cardano-tx-db-insert-native-script-block (type file-path)
-  "Insert an `org-mode' JS block containing FILE-PATH if TYPE is SimpleScriptV2."
+  "Insert an `org-mode' JS block containing FILE-PATH if TYPE is `SimpleScriptV2'."
   (when (string= type "SimpleScriptV2")
     (insert "\n#+begin_src js\n"
             (with-temp-buffer
@@ -397,7 +397,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
               :join ins :on (= ins:addr addresses:raw)])))
 
 (defun cardano-tx-db-utxo-info (&optional v-utxos)
-  "Obtain known data for V-UTXOS vector otherwise all UTXoS."
+  "Obtain known data for V-UTXOS vector otherwise all UTxOs."
   (emacsql (cardano-tx-db)
            (vconcat [:select [utxo raw lovelaces assets data:datumhash datum note] :from utxos
                      :left-join data :on (= data:datumhash utxos:datumhash)

@@ -307,7 +307,7 @@ Specify the NETWORK-MAGIC."
            (sort utxos #'string<))))
 
 (defun ouroboros-non-myopic-stake (stake-list)
-  "Query STAKE-LIST being each amount of lovelaces willing to stake."
+  "Query STAKE-LIST being each amount of lovelace willing to stake."
   (->> (sort stake-list #'<)
        (cl-map 'vector (lambda (a) (vector 0 a)))
        (cbor-tag-create :number 258 :content)))

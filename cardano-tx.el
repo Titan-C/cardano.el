@@ -71,7 +71,7 @@ This is only available on TX preview buffers.")
         (cardano-tx-get-in result 'rewardAccountBalance))))))
 
 (defun cardano-tx-utxos (addresses)
-  "Recover the utxos sitting at ADDRESSES."
+  "Recover the UTxOs sitting at ADDRESSES."
   (let ((utxos-file (make-temp-file "utxos-" nil ".json")))
     (apply #'cardano-tx-cli "query" "utxo" "--out-file" utxos-file
            (--mapcat (list "--address" it) addresses))
@@ -120,7 +120,7 @@ Would UTxO have a DATUM include according to TYPED."
    (string-trim-right)))
 
 (defun cardano-tx-helm-utxos (reset)
-  "Pick from wallet controlled utxos and put them on kill ring.
+  "Pick from wallet controlled UTxOs and put them on kill ring.
 If RESET query the node again."
   (interactive "P")
   (when (or reset (null (cardano-tx-db-utxo-info)))
