@@ -400,17 +400,17 @@ It produces the actual policy-id from the MINT-ROWS."
            (kill-new (cardano-tx-view-or-hash tx-file t)))
   (cardano-tx-db-utxo-reset))
 
+(defun cardano-tx--parse-yaml (str)
+  "From yaml STR to alist."
+  (yaml-parse-string str :object-type 'alist :object-key-type 'string))
+
 (defun cardano-tx--input-buffer ()
   "Parse the active transaction buffer into an alist."
-  (yaml-parse-string (buffer-substring-no-properties (point-min) (point-max))
-                     :object-type 'alist :object-key-type 'string))
+  (cardano-tx--parse-yaml (buffer-substring-no-properties (point-min) (point-max))))
 
 (defun cardano-tx-available-balance (input-data)
   "Calculate and save as yaml into kill ring the available balance from INPUT-DATA."
-  (interactive
-   (list (yaml-parse-string (buffer-substring-no-properties (point-min) (point-max))
-                            :object-type 'alist :object-key-type 'string
-                            :null-object nil)))
+  (interactive (list (cardano-tx--input-buffer)))
   (let ((fee (list (cons "lovelace" (cardano-tx-get-in input-data 'fee))))
         (spent-value
          (mapcar (lambda (tx-out) (cardano-tx-assets-hexify (cardano-tx-get-in tx-out 'amount)))

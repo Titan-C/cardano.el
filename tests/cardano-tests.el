@@ -263,8 +263,7 @@
                                ("value" ("lovelace" . 50847374)))))
    (cardano-tx-db-utxo--list)
 
-   (with-temp-buffer
-     (insert "
+   (should (equal (cardano-tx-available-balance(cardano-tx--parse-yaml "
 inputs:
   - utxo: 8bdfcfa7faa87#0
   - utxo: fdacb43b67119#0
@@ -272,11 +271,10 @@ mint:
   abc64:
     assets:
       test: 64
-")
-     (should (equal (call-interactively #'cardano-tx-available-balance)
-                    "      lovelace: 123452968
+"))
+                  "      lovelace: 123452968
       abc64:
-        \"test\": 64")))))
+        \"test\": 64"))))
 
 (ert-deftest test-tx-witness-query ()
   (should (equal (cardano-tx-witness-query nil) []))
