@@ -75,7 +75,7 @@ This is only available on TX preview buffers.")
   (let ((utxos-file (make-temp-file "utxos-" nil ".json")))
     (apply #'cardano-tx-cli "query" "utxo" "--out-file" utxos-file
            (--mapcat (list "--address" it) addresses))
-    (cardano-tx-db-utxo-reset)
+    (cardano-tx-db-utxo-reset (cardano-tx-db))
     (let ((json-key-type 'string))
       (cardano-tx-db-utxo-load (json-read-file utxos-file)))))
 
@@ -399,7 +399,7 @@ It produces the actual policy-id from the MINT-ROWS."
   (message "%s\nTxId: %s. Copied to kill-ring"
            (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
            (kill-new (cardano-tx-view-or-hash tx-file t)))
-  (cardano-tx-db-utxo-reset))
+  (cardano-tx-db-utxo-reset (cardano-tx-db)))
 
 (defun cardano-tx--parse-yaml (str)
   "From yaml STR to alist."

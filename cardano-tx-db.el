@@ -33,6 +33,7 @@
 (require 'emacsql-sqlite)
 (require 'subr-x)
 (require 'json)
+(require 'cardano-tx-log)
 (require 'cardano-tx-utils)
 
 (defcustom cardano-tx-db-keyring-dir "~/cardano-tx-wallet-keys"
@@ -60,7 +61,8 @@
 
 (defun cardano-tx-db--set-user-version (db version)
   "Return to DB user VERSION."
-  (emacsql db [:pragma (= user-version $s1)] version))
+  (emacsql db [:pragma (= user-version $s1)] version)
+  version)
 
 (defun cardano-tx-db--backup (annotation)
   "Copy current database as snapshot naming ANNOTATION."
@@ -70,7 +72,7 @@
                   (file-name-sans-extension db-name)
                   annotation
                   (format-time-string "%Y-%m-%dT%T"))))
-    (message "Backing up %s %s" db-name snapshot-name)
+    (cardano-tx-log 'info "Backing up %s %s" db-name snapshot-name)
     (emacsql-close cardano-tx-db-connection)
     (sleep-for 0 5) ;; wait for close
     (copy-file db-name snapshot-name)
@@ -81,14 +83,23 @@
   "Update the database DB from VERSION to latest."
   (when (= version 0)
     (emacsql-with-transaction db
-      (message "Upgrade from v0 to v1")
-      (emacsql db [:create-table master-keys $S1]
+      (cardano-tx-log 'info "Upgrade from v0 to v1")
+      (emacsql db [:create-table :if-not-exists master-keys $S1]
                [(id integer :not-null :primary-key)
-                fingerprint
+                (fingerprint :unique)
                 encrypted
                 data
                 note])
       (cardano-tx-db--set-user-version db (setq version 1)))))
+
+(defun cardano-tx-db-upgrade-from (db)
+  (let ((ver (cardano-tx-db--user-version db)))
+    (when (< ver cardano-tx-db-version) ver)))
+
+(defun cardano-tx-db-latest-version-or-update (db)
+  (when-let ((version (cardano-tx-db-upgrade-from db)))
+    (-> (cardano-tx-db--backup (format "backup-v%d" version))
+        (cardano-tx-db--update version))))
 
 (defun cardano-tx-db--init (db)
   "Initiate tables on database DB."
@@ -100,19 +111,16 @@
 
 (defun cardano-tx-db ()
   "Retrieve active database."
-  (unless (and cardano-tx-db-connection (emacsql-live-p cardano-tx-db-connection))
+  (unless (and cardano-tx-db-connection (emacsql-live-p cardano-tx-db-connection)
+               (not (cardano-tx-db-upgrade-from cardano-tx-db-connection)))
     (let* ((db-path (expand-file-name "cardano.db" cardano-tx-db-keyring-dir))
            (connection (emacsql-sqlite db-path)))
       (condition-case nil
           (emacsql connection [:select * :from typed-files])
         (emacsql-error (cardano-tx-db--init connection)))
       (setq cardano-tx-db-connection connection)
-      (let ((version (cardano-tx-db--user-version connection)))
-        (when (< version cardano-tx-db-version)
-          (message "Database needs update doing a backup first")
-          (-> (cardano-tx-db--backup (format "backup-v%d" version))
-              (cardano-tx-db--update version))))
-      (cardano-tx-db-utxo-reset)))
+      (cardano-tx-db-latest-version-or-update connection)
+      (cardano-tx-db-utxo-reset connection)))
   cardano-tx-db-connection)
 
 (defun cardano-tx-db-retrieve-datum (datumhash)
@@ -320,7 +328,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
              (list id
                    (vector
                     type
-                    (file-name-nondirectory  file-path)
+                    (file-name-nondirectory (or file-path ""))
                     (or (car (split-string description "\n")) "")))))
    (setq tabulated-list-entries)))
 
@@ -408,12 +416,11 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
 
 ;;; UTxOs
 
-(defun cardano-tx-db-utxo-reset ()
-  "Clear and create temporary UTxO database."
-  (emacsql (cardano-tx-db) [:drop :table :if-exists utxos])
-  (emacsql (cardano-tx-db)
-           [:create :temporary :table utxos
-            ([(utxo :unique) addr-id datumhash lovelaces assets ])]))
+(defun cardano-tx-db-utxo-reset (db)
+  "Clear and create temporary UTxO database on DB."
+  (emacsql db [:drop :table :if-exists utxos])
+  (emacsql db [:create :temporary :table utxos
+                       ([(utxo :unique) addr-id datumhash lovelaces assets ])]))
 
 (defun cardano-tx-db-utxo--list ()
   "Return all known UTxOs."
@@ -446,8 +453,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
                      :join addresses :on (= utxos:addr-id addresses:id)]
                     (unless (seq-empty-p v-utxos)
                       [:where (in utxo $v1)])
-                    [:order-by [(asc lovelaces)]
-                     ])
+                    [:order-by [(asc lovelaces)]])
            v-utxos))
 
 (defun cardano-tx-db-utxo-spend (v-utxos)
