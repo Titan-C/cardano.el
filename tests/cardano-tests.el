@@ -248,6 +248,17 @@
                               :asset_name "70756c"
                               :quantity 7)]))))
 
+(ert-deftest test-certificates ()
+  (with-keyring
+   (cardano-tx-address-new-key-files t "stake")
+   ;; enough to produce a certificate, means it found the key
+   (should
+    (cardano-tx--delegation-cert
+     '((delegation . ((pool . "pool1ucmm6rgdta0sw4qrcj3vml4wsr8pld495pptuypxg2uuvvlqest"))))))
+   (should
+    (cardano-tx--registration-cert
+     '((registration . :null))))))
+
 (ert-deftest test-tx-balance ()
   (with-keyring
    (emacsql (cardano-tx-db) [:insert-or-ignore :into addresses [raw] :values $v1]

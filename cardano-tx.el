@@ -322,7 +322,7 @@ It produces the actual policy-id from the MINT-ROWS."
 
 (defun cardano-tx--registration-cert (cert)
   "Return registration certificate file or create it if needed from object CERT."
-  (let ((default-stake-key (cadar (cardano-tx-db-stake-keys))))
+  (let ((default-stake-key (caddar (cardano-tx-db-stake-keys))))
     (pcase (cardano-tx-get-in cert 'registration)
       ((pred null) nil)
       (:null (-some-> default-stake-key (cardano-tx-address-stake-registration-cert)))
@@ -339,7 +339,7 @@ It produces the actual policy-id from the MINT-ROWS."
      (cardano-tx-get-in conf 'pool)
      (or
       (cardano-tx-get-in conf 'vkey-file)
-      (cadar (cardano-tx-db-stake-keys))))))
+      (caddar (cardano-tx-db-stake-keys))))))
 
 (defun cardano-tx--build-instructions (input-data)
   "Build a transaction from INPUT-DATA."

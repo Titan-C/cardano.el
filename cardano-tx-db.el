@@ -43,6 +43,7 @@
 
 (defvar cardano-tx-db-connection nil)
 
+;;; DB schema
 (defconst cardano-tx-db-version 1)
 
 (defconst cardano-tx-db--table-schema
@@ -55,8 +56,16 @@
     (tx-annotation
      [(txid :unique :primary-key) annotation])))
 
+(defun cardano-tx-db--init (db)
+  "Initiate tables on database DB."
+  (emacsql-with-transaction db
+    (pcase-dolist (`(,table ,schema) cardano-tx-db--table-schema)
+      (emacsql db [:create-table :if-not-exists $i1 $S2] table schema))
+    (cardano-tx-db--set-user-version db 0))
+  (cardano-tx-db--update db 0))
+
 (defun cardano-tx-db--user-version (db)
-  "Return current user version."
+  "Return current DB user version."
   (caar (emacsql db [:pragma user-version])))
 
 (defun cardano-tx-db--set-user-version (db version)
@@ -66,6 +75,7 @@
 
 (defun cardano-tx-db--backup (annotation)
   "Copy current database as snapshot naming ANNOTATION."
+  (emacsql-close cardano-tx-db-connection)
   (let* ((db-name (slot-value cardano-tx-db-connection 'file))
          (snapshot-name
           (format "%s-%s-%s.db"
@@ -73,8 +83,6 @@
                   annotation
                   (format-time-string "%Y-%m-%dT%T"))))
     (cardano-tx-log 'info "Backing up %s %s" db-name snapshot-name)
-    (emacsql-close cardano-tx-db-connection)
-    (sleep-for 0 5) ;; wait for close
     (copy-file db-name snapshot-name)
     ;; reconnect
     (setq cardano-tx-db-connection (emacsql-sqlite db-name))))
@@ -93,21 +101,15 @@
       (cardano-tx-db--set-user-version db (setq version 1)))))
 
 (defun cardano-tx-db-upgrade-from (db)
+  "From which version does DB needs upgrade."
   (let ((ver (cardano-tx-db--user-version db)))
     (when (< ver cardano-tx-db-version) ver)))
 
-(defun cardano-tx-db-latest-version-or-update (db)
+(defun cardano-tx-db-maybe-update (db)
+  "Upgrade DB when needed."
   (when-let ((version (cardano-tx-db-upgrade-from db)))
     (-> (cardano-tx-db--backup (format "backup-v%d" version))
         (cardano-tx-db--update version))))
-
-(defun cardano-tx-db--init (db)
-  "Initiate tables on database DB."
-  (emacsql-with-transaction db
-    (pcase-dolist (`(,table ,schema) cardano-tx-db--table-schema)
-      (emacsql db [:create-table :if-not-exists $i1 $S2] table schema))
-    (cardano-tx-db--set-user-version db 0))
-  (cardano-tx-db--update db 0))
 
 (defun cardano-tx-db ()
   "Retrieve active database."
@@ -119,10 +121,11 @@
           (emacsql connection [:select * :from typed-files])
         (emacsql-error (cardano-tx-db--init connection)))
       (setq cardano-tx-db-connection connection)
-      (cardano-tx-db-latest-version-or-update connection)
+      (cardano-tx-db-maybe-update connection)
       (cardano-tx-db-utxo-reset connection)))
   cardano-tx-db-connection)
 
+;;; DB Table queries
 (defun cardano-tx-db-retrieve-datum (datumhash)
   "Query database for DATUMHASH."
   (car
@@ -141,14 +144,11 @@
 
 (defun cardano-tx-db-stake-keys ()
   "Return stake verification keys."
-  (cardano-tx-db-files-of-type  "StakeVerificationKeyShelley_ed25519"))
+  (cardano-tx-db-typed-files-where 'type "StakeVerificationKeyShelley_ed25519"))
 
 (defun cardano-tx-db-address--list ()
   "Return the list of all monitored addresses."
-  (emacsql (cardano-tx-db)
-           [:select [raw path] :from addresses
-            :left-join typed-files :on (= spend-key typed-files:id)
-            :where (= monitor 't)]))
+  (emacsql (cardano-tx-db) [:select [raw] :from addresses :where (= monitor 't)]))
 
 (defun cardano-tx-db-insert-address (address &optional note spend-id stake-id monitor)
   "Insert into db ADDRESS with optionally a NOTE.
@@ -156,8 +156,7 @@
 Specify also SPEND-ID and STAKE-ID if known from typed files.
 MONITOR the address if not nil."
   (emacsql (cardano-tx-db)
-           [:insert-or-ignore :into addresses
-            :values $v1]
+           [:insert-or-ignore :into addresses :values $v1]
            (vector nil address spend-id stake-id monitor (or note ""))))
 
 (defun cardano-tx-db-update-address-description (address description)
@@ -181,23 +180,26 @@ MONITOR the address if not nil."
                  (cardano-tx-db-update-address-description address))
     (kill-buffer)))
 
+(defun cardano-tx-db-update-address-monitor (address monitor-p)
+  "Update in db for ADDRESS its MONITOR-P state."
+  (emacsql (cardano-tx-db)
+           [:insert :into addresses
+            [raw monitor]
+            :values $v1
+            :on-conflict
+            :do-update
+            :set (= note $s2)]
+           (vector address monitor-p)
+           monitor-p))
+
 (defun cardano-tx-db-address-toggle-watch ()
   "Toggle the watch flag for registered address."
   (interactive)
   (let ((activep (-> (tabulated-list-get-entry) (aref 0) (string= "YES")))
-        (address (-> (tabulated-list-get-entry) (aref 1)))
-        (note (-> (tabulated-list-get-entry) (aref 3) (substring-no-properties))))
+        (address (-> (tabulated-list-get-entry) (aref 1))))
     (setf (aref (tabulated-list-get-entry) 0)
           (if activep "NO" "YES"))
-    (emacsql (cardano-tx-db)
-             [:insert :into addresses
-              [raw monitor note]
-              :values $v1
-              :on-conflict
-              :do-update
-              :set (= monitor $s2)]
-             (vector address (not activep) note)
-             (not activep)))
+    (cardano-tx-db-update-address-monitor address (not activep)))
   (forward-line)
   (tabulated-list-print t))
 
@@ -308,12 +310,12 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
     (emacsql (cardano-tx-db)
              [:insert-or-ignore :into typed-files :values $v1])))
 
-(defun cardano-tx-db-files-of-type (type)
-  "Return all files of TYPE."
+(defun cardano-tx-db-typed-files-where (column value)
+  "Filters the typed files table on COLUMN by VALUE."
   (emacsql (cardano-tx-db)
-           [:select [id path description]
-            :from typed-files :where (= type $s1)]
-           type))
+           `[:select [id type path description]
+             :from typed-files :where (= ,column '$s1)]
+           value))
 
 (defun cardano-tx-db-dired-load-files ()
   "Load into local database all Dired marked files.
@@ -335,18 +337,11 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
                     (or (car (split-string description "\n")) "")))))
    (setq tabulated-list-entries)))
 
-(defun cardano-tx-db-file (file-id)
-  "Return file & description for FILE-ID."
-  (car
-   (emacsql (cardano-tx-db)
-            [:select [type description path] :from typed-files :where (= id $s1)]
-            file-id)))
-
 (defun cardano-tx-db-file-open (file-id)
   "Open file of FILE-ID."
   (interactive
    (list (tabulated-list-get-id)))
-  (-some-> (cardano-tx-db-file file-id) (elt 2) (find-file)))
+  (-some-> (cardano-tx-db-typed-files-where 'id file-id) (car) (elt 2) (find-file)))
 
 (defun cardano-tx-db-insert-native-script-block (type file-path)
   "Insert an `org-mode' JS block containing FILE-PATH if TYPE is `SimpleScriptV2'."
@@ -368,13 +363,13 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
   "Annotate data for FILE-ID."
   (interactive
    (list (tabulated-list-get-id)))
-  (when-let ((result (cardano-tx-db-file file-id)))
+  (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
     (with-current-buffer (generate-new-buffer "*File description*")
       (setq-local header-line-format (format "Description of file: %s" (elt result 2)))
       (org-mode)
-      (insert (cadr result) "\n")
+      (insert (elt result 3) "\n")
       (let ((cur (point)))
-        (cardano-tx-db-insert-native-script-block (car result) (caddr result))
+        (cardano-tx-db-insert-native-script-block (elt result 1) (elt result 2))
         (add-text-properties cur (point-max) '(read-only t))
         (goto-char cur)
         (let ((script-length (- (point-max) cur)))

@@ -72,7 +72,7 @@ Files are located in keyring dir together with matching address files."
 (defun cardano-tx-address-stake-pick (&optional allow-none)
   "Select from registered stake keys.
 ALLOW-NONE flag for when explicitly skipping a stake key."
-  (let ((named-keys (append (--map (cons (car (split-string (caddr it)"\n")) it) (cardano-tx-db-stake-keys))
+  (let ((named-keys (append (--map (cons (car (split-string (caddr it) "\n")) it) (cardano-tx-db-stake-keys))
                             (when allow-none '(("No Reward"))))))
     (assoc (completing-read "Reward key: " named-keys) named-keys)))
 
@@ -82,16 +82,14 @@ ALLOW-NONE flag for when explicitly skipping a stake key."
 To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
   (interactive
    (cons (completing-read "Which spending condition? "
-                          (mapcar #'car  ;; just to show files types that are known and available
-                                  (emacsql (cardano-tx-db) [:select :distinct type :from typed-files :where (in type $v1)]
-                                           ["PaymentVerificationKeyShelley_ed25519"
-                                            "SimpleScriptV2"
-                                            "PlutusScriptV1"]))
+                          '("PaymentVerificationKeyShelley_ed25519"
+                            "SimpleScriptV2"
+                            "PlutusScriptV1")
                           nil t)
          (cons (yes-or-no-p "Watch the created addresses?")
                (cdr (cardano-tx-address-stake-pick t)))))
-  (-some->> (cardano-tx-db-files-of-type spending-type)
-    (mapcar (-lambda ((id payment-key desc))
+  (-some->> (cardano-tx-db-typed-files-where 'type spending-type)
+    (mapcar (-lambda ((id _type payment-key desc))
               (vector nil
                       (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
                           (cardano-tx-address-payment payment-key stake-key-path)
@@ -149,9 +147,7 @@ Optionally define the STAKE-VKEY file."
 
 (defun cardano-tx-address-named ()
   "Wallet list for easier selection."
-  (->> (emacsql (cardano-tx-db)
-                [:select [raw note] :from addresses
-                 :left-join typed-files :on (= spend-key typed-files:id)])
+  (->> (emacsql (cardano-tx-db) [:select [raw note] :from addresses])
        (mapcar (-lambda ((addr note))
                  (cons (concat (cardano-tx-address--short addr) " # "
                                (or (car (split-string note "\n")) ""))
@@ -171,7 +167,7 @@ Optionally define the STAKE-VKEY file."
    (list (read-file-name "Select verification key file: " cardano-tx-db-keyring-dir
                          nil t nil (lambda (n) (string-suffix-p ".vkey" n)))))
   (kill-new
-   (if (member (expand-file-name vkey-file) (mapcar #'cadr (cardano-tx-db-stake-keys)))
+   (if (member (expand-file-name vkey-file) (mapcar #'caddr (cardano-tx-db-stake-keys)))
        (cardano-tx-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
      (cardano-tx-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))))
 
