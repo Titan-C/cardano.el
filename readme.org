@@ -10,10 +10,10 @@ at the cost of flexibility.
 The command line is a great tool, yet if I ever write more than 4 words on the
 command line I go crazy. The command line is, for me, a tool for quick queries
 not a work environment. Bash scripts are good to automate simple things and keep
-dependencies low, however I also go crazy when maintaining large bash scripts.
-Bash scripts keep you bound to the one dimensionality of the command line.
-Despite editing those scripts on an editor you must mark line breaks, and keep
-track of quoting your variables and input.
+dependencies low. However, I go crazy when maintaining large bash scripts.  Bash
+scripts enslave you to the one dimensionality of the command line. Even when
+editing those scripts on an editor you must mark line breaks, and keep track of
+quoting your variables and input.
 
 I want a tool that lets me craft my transactions, a powerful tool to interact
 with the =cardano-node=, which has all the features, does not get cumbersome as
@@ -52,7 +52,7 @@ offering you a declarative way to specify your transactions, without loosing
 fine grain control.
 
 This project has received support from the Cardano community, it is a Catalyst
-Fund 7 & 9 funded projects and is a Plutus Pioneer Capstone challenge prize
+Fund 7 & 9 funded projects and is a Plutus Pioneer Capstone 2021 challenge prize
 winner.
 
 * Installation
@@ -73,7 +73,8 @@ functionalities.
 This is the latest release. Install it and also the following packages.
 
 *** This package itself
-This package is on MELPA. If you use =use-package=, get it directly
+This package is on MELPA. If you use =use-package=, get it directly with all
+its Emacs dependencies with.
 #+begin_src emacs-lisp
 (use-package cardano-tx
   :commands (cardano-tx-new cardano-tx-cli-tip))
@@ -102,8 +103,8 @@ There are some variables you need to configure.
 (setq cardano-tx-address-command (executable-find "cardano-address"))
 ;; Path to the running node socket
 (setq cardano-tx-cli-node-socket "/full/path/to/the/testnet/socket")
-;; These are the network arguments for the testnet
-(setq cardano-tx-cli-network-args '("--testnet-magic" "1097911063"))
+;; These are the network arguments for the Preview testnet
+(setq cardano-tx-cli-network-args '("--testnet-magic" "2"))
 ;; When connecting to mainnet use
 ;; (setq cardano-tx-cli-network-args '("--mainnet"))
 
@@ -111,16 +112,17 @@ There are some variables you need to configure.
 ;; wallet. It also holds your staking key. Make sure this folder exists, as this
 ;; tool will not create it. For wallet hygiene use separate directories for
 ;; mainnet and testnets. It also holds an SQLite database to administer known data.
+;; WARNING: Keys stored here are not encrypted
 (setq cardano-tx-db-keyring-dir (expand-file-name "~/cardano-wallet-keys/"))
 ;; In case you want to log the CLI commands used
 (setq cardano-tx-log-level 'debug)
 #+end_src
 ** Cardano-Wallet (optional)
-Although this package focuses on the low-level, high power interfaces for the
-=cardano-cli= and =cardano-addresses=, most of the time you just need a simple
-wallet to spend your ADA and keep track of that transaction history. To achieve
-that goal, this tool also integrates with [[https://github.com/input-output-hk/cardano-wallet][cardano-wallet]] the middleware server
-that sits between your =cardano-node= and the =Daedalus= frontend.
+This package focuses on the low-level, high power interfaces for the
+=cardano-cli= and =cardano-addresses=. Yet, most of the time you just need a
+simple wallet to spend your ADA and keep track of that transaction history. To
+achieve that goal, this tool also integrates with [[https://github.com/input-output-hk/cardano-wallet][cardano-wallet]] the middle-ware
+server that sits between your =cardano-node= and the =Daedalus= front-end.
 
 =cardano-wallet= needs its own configuration to run the server that connects to
 your node and provides a local REST API to manage your wallet. Once you have
@@ -140,19 +142,19 @@ the information about the tip.
 
 At the time of writing it showed this:
 #+begin_src yaml
-epoch: 158
-hash: 8b6c54c50355c945c2c9fcf354869651d60c129c86fd1be3b8c3d35273352569
-slot: 38212104
-block: 2941331
-era: Alonzo
-syncProgress: 100.00
+block: 190408
+epoch: 45
+era: Babbage
+hash: 4e422ef1108925a9b5a2d97b20a9938f1afc09297ae8d6522534dbc432bb1366
+slot: 3971838
+syncProgress: "100.00"
 #+end_src
 ** Create key pairs and manage addresses
 *** Bag of keys
-To create new keys and their address use: =M-x cardano-tx-address-new-key-files=.
-It will prompt you how to name your new keys in your wallet. Type a name or many
-space separated names. This will populate the directory you defined in
-=cardano-tx-db-keyring-dir=, with the keys.
+To create new keys and their corresponding addresses use: =M-x
+cardano-tx-address-new-key-files=.  It will prompt you how to name your new
+keys.  Type one name or more separating them by spaces. This will populate the
+directory you defined in =cardano-tx-db-keyring-dir=, with the keys.
 
 This means:
 #+begin_src emacs-lisp
@@ -189,10 +191,11 @@ To create a staking key (under the name =stake2=) use the ELisp command:
 #+end_src
 
 The name =stake= is the default name for the reward key, and created
-automatically. After creating additional reward keys, which you want to use in
-you addresses use =cardano-tx-address-load=, select the spending key type, confirm
-whether to watch the new address and which reward key you want to use. All key
-file and addresses are stored in the SQLite database in the =cardano.db= file.
+automatically. After creating additional reward keys, you can generate new
+addresses that use those keys by calling =cardano-tx-address-load=. Select the
+spending key type, confirm whether to watch the new address and which reward key
+you want to use. All key file and addresses are stored in the SQLite database in
+the =cardano.db= file.
 
 The command =cardano-tx-db-addresses= opens a table view of all your know addresses.
 The keyboard shortcut =c= copies the address in the row your point is. =w=
@@ -220,7 +223,7 @@ If you generated some key files previous to using cardano.el or from previous
 versions of it, before its use of a SQLite database you need to register those
 keys to the database. The easiest way is using =dired= to mark the files you
 want to register and the interactively calling =cardano-tx-db-dired-load-files=.
-You can also register cardano native simple scripts (multisigs/timelocks) and
+You can also register Cardano native simple scripts (multisigs/timelocks) and
 Plutus script files.
 
 To visualize the files registered in the database call the interactive function
@@ -235,7 +238,7 @@ directly from this view.
 | a        | =cardano-tx-db-file-annotate= | Add a note to the file |
 
 *** Manage addresses
-=cardano-tx-address-load= calculates addresses from registered files and load them
+=cardano-tx-address-load= calculates addresses from registered files and loads them
 on the address database. Call it after registering new files.
 
 To visualize addresses loaded into your database call =cardano-tx-db-addresses=.
@@ -269,22 +272,22 @@ transaction itself is about.  I'm sure you can understand it just by reading it.
 #+begin_src yaml
 # These are the inputs for the transaction.
 inputs:
-  - utxo: 4ea2254f4449af35b730b08f864663f1f0fd7a8a659e2fcf9a21fe891c2991d1#0
-  - utxo: e0beb22982562e607019e6bb7f8cba200bba5f858c94bf6fd97ef4431ccb8be8#0
+  - utxo: a7c5d4ab42016fa2cbdcbdb03133a9c6826ad5432f2a30e4b5ed32c1ac4c86f0#1
+  - utxo: bd61923ca80f4789a2a7eddbe57e200fcb3af84b7d990a2fb5bc30efc71ba440#1
 
 # Outputs are defined in the same way.
 outputs:
   # A simple payment output to this address
-  - address: addr_test1qr047xuayncdvsjdldy740a8l9hh6advdzex9nqtp4y3smtk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qqzhuv0
+  - address: addr_test1qznwk2s30nyvtgn20z27kqlnezxn6gu3ud8f3zyrxfae3ymk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qt6aaad
     amount:
       lovelace: 10000000
 
   # Payment to a Plutus script. The AlwaysSucceeds script
   - address: addr_test1wpnlxv2xv9a9ucvnvzqakwepzl9ltx7jzgm53av2e9ncv4sysemm8
     amount:
-      lovelace: 15000000
+      lovelace: 1234567
     # You must include the datum. This tool calculates the hash for you.
-    datum: [1, "the always succeeds contract", {"with a": "mixed type datum"}]
+    datum: [2, "the always succeeds contract", {"with a": "mixed type datum"}]
 
   # Payment to another Plutus script
   - address: addr_test1wzxfj3l2es945szu8wd6mm9jnkj7wze2zwtagkhdmn62gxqnvz87d
@@ -300,11 +303,11 @@ outputs:
     change: true # The cardano-cli balances it. Only lovelaces for now
 #+end_src
 
-Not only is it readable, you get the advantages of syntax highlight,
-indentation, auto-completion and many more editing tools from the editor. You
-can also write comments in between the lines, because yaml allows that. That is
-not possible within a bash script using long commands with line breaks, you only
-get to comment around the blocks of instructions.
+Not only is it readable, you get the advantages of syntax highlighting,
+indentation, auto-completion and more editing tools from the editor. You can of
+course write comments in between the lines, because yaml allows that. That is
+not possible within a bash script that uses long commands with line breaks. You
+only get to comment around the blocks of instructions.
 
 When creating this transaction there are utility functions that help you with some input.
 For example:
@@ -331,13 +334,13 @@ sign it, submit it, close the editing window and copy the transaction id to the
 clipboard for you to look for it in your favorite explorer.
 
 This transaction has the id
-[[https://testnet.adatools.io/transactions/20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00][20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00]], and is on the
-Testnet.
+[[https://preview.cexplorer.io/tx/591d446e2ed8951e07cd9260df0eaec308e7b6eb75cae68124344bec09c9a75a][591d446e2ed8951e07cd9260df0eaec308e7b6eb75cae68124344bec09c9a75a]], and is on the
+Preview Testnet.
 **** Change address and fee
 The editor uses in general the =build= command to craft the transaction, which
 requires a change address. Unfortunately, that change address only balances the
-transaction with lovelaces and is a required field. However, if your change is
-exactly zero lovelaces the transaction would still work(see
+transaction in lovelace and is a required field. However, if your change is
+exactly zero lovelace the transaction would still work(see
 https://github.com/input-output-hk/cardano-node/issues/3041). You can thus use
 than function =cardano-tx-available-balance= to balance the transaction and once
 you try to build it extract the minimum fee value from the error message. Then
@@ -370,7 +373,7 @@ will use yasnippet to load minting template specification.
 
 #+begin_src yaml
 inputs:
-  - utxo: 4fae4f6e9c80d6c56476e083e9562a867ab7a6cd6be4e694d1f0b0e0b8d97eee#0
+  - utxo: bd61923ca80f4789a2a7eddbe57e200fcb3af84b7d990a2fb5bc30efc71ba440#0
 
 # Minting policies are characterized by the policy-id, here you can name them,
 # and use that name throughout the transaction. The editor will then replace the
@@ -383,7 +386,7 @@ mint:
   reward-tokens: # This is my first policy name
     policy: # Declare the policy. A single signature is enough
       type: sig
-      keyHash: df5f1b9d24f0d6424dfb49eabfa7f96f7d75ac68b262cc0b0d49186d # fourth
+      keyHash: 73a144c2762078541ac9d258714121da5044069dc442cc7fe1fb0471 # fourth
     assets: # Here is the amount of assets to mint. I name each of the tokens
       gold: 100
       platinum: 50
@@ -399,7 +402,7 @@ mint:
         - type: sig
           keyHash: 9bcde05606b1fbd5f5390b3ebbba0f523bddba5822027c856ebc336a # third
         - type: before
-          slot: 41770500 # this is the time lock
+          slot: 3979246 # this is the time lock
     assets: # Minting two unique NFTs
       networking: 1
       frustration: 1
@@ -416,7 +419,7 @@ witness:
 # For Mary Era Timelocked NFTs don't forget to match the validity interval, with
 # the one on the time lock policy
 validity-interval:
-  invalid-hereafter: 41770500
+  invalid-hereafter: 3979246
   # invalid before:
 
 # The metadata here allows to describe the NFTs. You can then see them on an explorer
@@ -442,14 +445,14 @@ outputs:
         networking: 1 # token name
       reward-tokens: # other policy name
         gold: 40 # corresponding token name
-      lovelace: 10000000
+      lovelace: 2000000
 
   - address: addr_test1qznwk2s30nyvtgn20z27kqlnezxn6gu3ud8f3zyrxfae3ymk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qt6aaad # second
     amount:
       reward-tokens:
         gold: 60
         platinum: 15
-      lovelace: 15678910
+      lovelace: 3678910
 
   - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
     amount:
@@ -457,44 +460,46 @@ outputs:
         frustration: 1
       reward-tokens:
         platinum: 35
-      lovelace: 52468413
+      lovelace: 4002413
 
   # ALWAYS think about your change address
   - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
     change: true
 #+end_src
-Have a look at the transaction on an testnet explorer: [[https://testnet.adatools.io/transactions/9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b][9115ce93cc4afe074e79352de16671f9e85f77732406943ab05809180cdd282b]]
 
-Notice that the token names are still described by human readable strings. The
-editor translates those names to hexadecimal values when creating the
-transaction as required by the cardano-node>=1.33.
+Have a look at the transaction on an testnet explorer:
+[[https://preview.cexplorer.io/tx/b679f4aab00161e0e96b3b3b61611f849fb9f075aeff351fdf3c6cc1954496c7][b679f4aab00161e0e96b3b3b61611f849fb9f075aeff351fdf3c6cc1954496c7]] Notice that the
+token names are still described by human readable strings. The editor translates
+those names to hexadecimal values when creating the transaction as required by
+the cardano-node>=1.33.
 
 *** Registering stake address and delegating to a stakepool
 The transaction to register and delegate at the same time looks like this:
 #+begin_src yaml
-input:
-  - utxo: 83fa0a223783c9fb8a610433d75778c29945151a7bd7957e7c8c8289d7dc9e79#0
-
-outputs:
-  # ALWAYS think about your change address
-  - address:  addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
-    change: true
+inputs:
+  - utxo: b679f4aab00161e0e96b3b3b61611f849fb9f075aeff351fdf3c6cc1954496c7#0
 
 certificates:
   # Standard certificates
   - registration:
-      # vkey-file:  # optionally pick the staking verification key file
-      # deregistration: true
+    # vkey-file:  # optionally pick the staking verification key file
+    # deregistration: true
   - delegation:
-      pool: pool1hqatqegjcnsg8lj66ys2fe2zg8vl7hjsfy2yupcpnxxqucx8zgq
+      pool: pool1a7h89sr6ymj9g2a9tm6e6dddghl64tp39pj78f6cah5ewgd4px0
       # vkey-file:  # optionally pick the staking verification key file
-  # Specify your particular certificate file
+  # Specify the certificate file
   # - file:
 
 # You must sign with the stake key to authorize the certificate
 witness:
   - stake
+
+outputs:
+  # ALWAYS think about your change address
+  - address: addr_test1qpsfwsr4eqjfe49md9wpnyp3ws5emf4z3k6xqagvm880zgnk2wgk4wl2rz04eaqmq9fnxhyn56az0c4d3unvcvg2yw4qmkmv4t
+    change: true
 #+end_src
+
 
 It is important to note, that you must register the stake address before you
 delegate your stake. If you are doing both actions in the same transaction, then
@@ -503,7 +508,7 @@ this example) otherwise the transaction will fail. If you want to do this on
 separate transactions, it still holds to register before you delegate.
 
 This sample transaction is also on the testnet under the txid:
-[[https://testnet.cardanoscan.io/transaction/d77ecc5c249a7875fcae8a4dc0940b62a214d4fbcdc9e82a0ba4c38607b8ea2d][d77ecc5c249a7875fcae8a4dc0940b62a214d4fbcdc9e82a0ba4c38607b8ea2d]]
+[[https://preview.cexplorer.io/tx/649bc635b27d372f5274e439b70718732cea816483ab47c93ef6ec3d941fc0a0][649bc635b27d372f5274e439b70718732cea816483ab47c93ef6ec3d941fc0a0]]
 
 *** Withdraw your staking rewards
 Withdrawing is again just another element of your transaction.
@@ -530,9 +535,6 @@ witness:
 
 The function =cardano-tx-rewards= receives as input the staking addresses and
 helps you with the total amount in the rewards.
-
-This sample transaction is also on the testnet under the txid:
-[[https://testnet.cardanoscan.io/transaction/81eaf7c476709599a1d2162104714cf5ab9b0b3d4b65287efcfd58483e8a3768][81eaf7c476709599a1d2162104714cf5ab9b0b3d4b65287efcfd58483e8a3768]]
 
 *** Claiming from a Plutus script address
 The Plutus script in this example has this validator script, and corresponds to
@@ -568,7 +570,7 @@ inputs:
   # This is the UTxO that created in the previous section
   # Because it is a Plutus script. To unclock it we need to provide extra
   # information like the Plutus script, datum and redeemer
-  - utxo: 20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00#3
+  - utxo: 591d446e2ed8951e07cd9260df0eaec308e7b6eb75cae68124344bec09c9a75a#3
     # path to the script file
     script-file: "contracts/list-in-range.plutus"
     # path to the typed datum
@@ -577,7 +579,7 @@ inputs:
     # can be directly parsed. There is no need to write the typed version in a file.
     redeemer: [2, -5, -1, 4, 0, 3, 1, 6, -4]
 
-collateral: 20d4494be79b860b1085fc5b763840d74c25c5e2ba05daeed664b3e674301b00#1
+collateral: 649bc635b27d372f5274e439b70718732cea816483ab47c93ef6ec3d941fc0a0#0
 
 outputs:
   # ALWAYS think about your change address
@@ -587,8 +589,8 @@ outputs:
 
 =C-c C-c= or calling =M-x cardano-tx-edit-finish=, builds and submits the
 transaction.  In this case the transaction is
-[[https://testnet.adatools.io/transactions/0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8][0e51486385a1d2cc811bf51fc27c73a609b87bfd8846955d1e67b358f44232e8]] and you can
-find it on the testnet explorer.
+[[https://preview.cexplorer.io/tx/76fd80c71c9e81cd68e2682a2a5da4ec83eff7beb2381714fb8aa85dc4056d3a][76fd80c71c9e81cd68e2682a2a5da4ec83eff7beb2381714fb8aa85dc4056d3a]] and you can
+find it on the preview testnet explorer.
 
 That's it. This tool reflects the transaction crafting with a User Interface,
 that is the transaction itself and takes care of all the details about parsing
