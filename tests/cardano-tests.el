@@ -284,6 +284,18 @@ mint:
                  [:union :select [path] :from typed-files
                   :where (or (like path "%second%.vkey") (like path "%first%.vkey"))])))
 
+(ert-deftest test-witnesses ()
+  (with-keyring
+   (cardano-tx-db-insert-address "addr1qp" nil 1)
+   (emacsql (cardano-tx-db) [:insert-or-ignore :into typed-files [type path] :values $v1]
+            '["PaymentVerificationKeyShelley_ed25519" "signer.vkey"])
+   (cardano-tx-db-utxo-load '(("fdacb43b67119#0"
+                               ("address" . "addr1qp")
+                               ("value" ("lovelace" . 50847374)))))
+   (should (equal '("signer.skey")
+                  (cardano-tx-witnesses
+                   (cardano-tx--parse-yaml "collateral: fdacb43b67119#0"))))))
+
 ;; test utility
 (defun print-to-file (data filename)
   "Store DATA object into FILENAME."

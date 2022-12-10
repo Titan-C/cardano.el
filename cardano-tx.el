@@ -144,7 +144,8 @@ If RESET query the node again."
 (defun cardano-tx-witnesses (input-data)
   "Given the INPUT-DATA about to be spent.  Which wallets control them?
 All the wallet address-file pairs in the keyring are tested."
-  (->> (vconcat (cardano-tx-get-in input-data 'collateral)
+  (->> (vconcat (let ((col (cardano-tx-get-in input-data 'collateral)))
+                  (if (stringp col) (vector col) col))
                 (--map (cardano-tx-get-in it 'utxo)
                        (cardano-tx-get-in input-data 'inputs)))
        (emacsql (cardano-tx-db)
