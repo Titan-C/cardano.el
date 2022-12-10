@@ -7,6 +7,12 @@ inputs:
     script-file: /tmp/AlwaysSucceeds.plutus
     datumfile: /tmp/datum-nu46JN.json
     redeemer: Mine
+  - utxo: 591d446e2ed8951e07cd9260df0eaec308e7b6eb75cae68124344bec09c9a75a#3
+    script-file: "/tmp/list-in-range.plutus"
+    datumfile: "/tmp/tuple_ints(-5,6)"
+    redeemer: [2, -5, -1, 4, 0, 3, 1, 6, -4]
+
+collateral: 649bc635b27d372f5274e439b70718732cea816483ab47c93ef6ec3d941fc0a0#0
 
 withdrawals:
   - address: stake_test1upm98yt2h04p386u7sdsz5entjf6dw38u2kc7fkvxy9z82s5f2lrh

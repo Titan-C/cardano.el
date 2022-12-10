@@ -164,32 +164,25 @@
                                            '((lovelace . 1564)
                                              (policy2 (mi . 1)
                                                       (yo . 2)))
-                                           '((policy1 (one . 3)
-                                                      (two . 7))
+                                           '((policy1 (one . 3) (two . 7))
                                              (policy2 (yo . 3))
                                              (lovelace . 2111)))
-           '((policy1 (one . 3)
-                      (two . 7))
-             (policy2 (mi . 1)
-                      (yo . 5))
+           '((policy1 (one . 3) (two . 7))
+             (policy2 (mi . 1) (yo . 5))
              (lovelace . 3675))))
 
   (should (equal (cardano-tx-assets-merge-alists #'-
                                                  '((lovelace . 2111))
-                                                 '((policy1 (one . 3)
-                                                            (two . 7))
+                                                 '((policy1 (one . 3) (two . 7))
                                                    (policy2 (yo . 3))
                                                    (lovelace . 2111)))
-                 '((policy1 (one . -3)
-                            (two . -7))
+                 '((policy1 (one . -3) (two . -7))
                    (policy2 (yo . -3))))))
 
 (ert-deftest test-assets-flatten ()
   (should (equal
-           (cardano-tx-assets-flatten '((policy1 (one . 3)
-                                                 (two . 7))
-                                        (policy2 (mi . 1)
-                                                 (yo . 5))
+           (cardano-tx-assets-flatten '((policy1 (one . 3) (two . 7))
+                                        (policy2 (mi . 1) (yo . 5))
                                         (lovelace . 3675)))
            '((3 policy1 one) (7 policy1 two) (1 policy2 mi) (5 policy2 yo) 3675))))
 
@@ -261,7 +254,7 @@
                                ("address" .
                                 "addr_test1qp")
                                ("value" ("lovelace" . 50847374)))))
-   (cardano-tx-db-utxo--list)
+   ;; (cardano-tx-db-utxo--list)
 
    (should (equal (cardano-tx-available-balance(cardano-tx--parse-yaml "
 inputs:
@@ -327,14 +320,18 @@ mint:
    (cardano-tx-address-new-key "test-stake" t)
    (--zip-with (should (string-match-p it other))
                (read-from-file (expand-file-name "all-features.inst" test-dir))
-               (let ((default-directory cardano-tx-db-keyring-dir))
-                 (-> (with-current-buffer
-                         (find-file-noselect (expand-file-name "all-features.yml" test-dir))
-                       (cardano-tx--input-buffer))
-                     (cardano-tx--build-instructions)
-                     (flatten-tree)
-                     ;; (print-to-file "all-features.inst")
-                     )))))
+               (cl-letf (((symbol-function 'cardano-tx-cli)
+                          (lambda (&rest _args)
+                            ;; policy id of test. Skips all calls and queries
+                            "243a9175537bcf690eed5bc4227709793cf2c575e0bd045b7c2ba83a")))
+                 (let ((default-directory cardano-tx-db-keyring-dir))
+                   (-> (with-current-buffer
+                           (find-file-noselect (expand-file-name "all-features.yml" test-dir))
+                         (cardano-tx--input-buffer))
+                       (cardano-tx--build-instructions)
+                       (flatten-tree)
+                       ;; (print-to-file "all-features.inst")
+                       ))))))
 
 (provide 'cardano-tests)
 ;;; cardano-tests.el ends here
