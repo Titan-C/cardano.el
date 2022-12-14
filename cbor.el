@@ -4,9 +4,9 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.2
+;; Version: 0.2.3
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "25.1") (dash "2.19.0"))
+;; Package-Requires: ((emacs "25.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;
@@ -37,7 +37,6 @@
 
 (require 'hex-util)
 (require 'cl-lib)
-(require 'dash)
 (require 'json)
 (require 'seq)
 
@@ -127,7 +126,7 @@ Default to big endian unless LITTLE is non-nil."
        (pcase additional-information
          (20 :false) ;; False
          (21 t)
-         (22 nil) ;; NULL
+         (22 :null) ;; NULL
          (31 'break))))))
 
 (defun cbor-hex-p (str)
@@ -222,7 +221,7 @@ Default to big endian unless LITTLE is non-nil."
     (cbor--put-initial-byte! 7 20))
    ((eq t value)
     (cbor--put-initial-byte! 7 21))
-   ((null value)
+   ((eq :null value)
     (cbor--put-initial-byte! 7 22))))
 
 (provide 'cbor)

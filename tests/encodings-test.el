@@ -20,6 +20,7 @@
 (require 'ert)
 (require 'cbor)
 (require 'bech32)
+(require 'seq)
 
 (ert-deftest decode-hex-string ()
   (should (equal (decode-hex-string "70617a") "paz"))
@@ -30,6 +31,8 @@
 (ert-deftest cbor-test-decoding ()
   (pcase-dolist (`(,input . ,expected)
                  `(("1901c8" . 456)
+                   ("f6" . :null)
+                   ("a0" . nil)
                    ("6448495049" . "HIPI")
                    ("42abcd" . "abcd")
                    ("83050408" . [5 4 8])
@@ -55,7 +58,7 @@
                   "11qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc8247j"
                   "split1checkupstagehandshakeupstreamerranterredcaperred2y9e3w"
                   "?1ezyfcl"))
-    (-let (((encoding hrp . data) (bech32--decode test)))
+    (seq-let (encoding hrp &rest data) (bech32--decode test)
       (should (eq encoding 'bech32))
       (should (equal (downcase test) (bech32--encode 'bech32 hrp data))))))
 
@@ -88,7 +91,7 @@
                   "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8"
                   "split1checkupstagehandshakeupstreamerranterredcaperredlc445v"
                   "?1v759aa"))
-    (-let (((encoding hrp . data) (bech32--decode test)))
+    (seq-let (encoding hrp &rest data) (bech32--decode test)
       (should (eq encoding 'bech32m))
       (should (equal (downcase test) (bech32--encode 'bech32m hrp data))))))
 
