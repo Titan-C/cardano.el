@@ -188,7 +188,7 @@ MONITOR the address if not nil."
             :values $v1
             :on-conflict
             :do-update
-            :set (= note $s2)]
+            :set (= monitor $s2)]
            (vector address monitor-p)
            monitor-p))
 
