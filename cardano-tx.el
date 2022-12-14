@@ -145,18 +145,19 @@ If RESET query the node again."
   "Given the INPUT-DATA about to be spent.  Which wallets control them?
 All the wallet address-file pairs in the keyring are tested."
   (->> (vconcat (let ((col (cardano-tx-get-in input-data 'collateral)))
-                  (if (stringp col) (vector col) col))
-                (--map (cardano-tx-get-in it 'utxo)
-                       (cardano-tx-get-in input-data 'inputs)))
-       (emacsql (cardano-tx-db)
-                (vconcat
-                 [:select :distinct [path] :from utxos
-                  :join addresses :on (= addr-id addresses:id)
-                  :join typed-files :on (= spend-key typed-files:id)
-                  :where (and (= type "PaymentVerificationKeyShelley_ed25519") (in utxo $v1))]
-                 (cardano-tx-witness-query
-                  (cardano-tx-get-in input-data 'witness))))
-       (--map (replace-regexp-in-string ".vkey$" ".skey" (car it)))))
+                       (if (stringp col) (vector col) col))
+                     (--map (cardano-tx-get-in it 'utxo)
+                            (cardano-tx-get-in input-data 'inputs)))
+    (emacsql (cardano-tx-db)
+             (vconcat
+              [:select :distinct [path] :from utxos
+               :join addresses :on (= addr-id addresses:id)
+               :join typed-files :on (= spend-key typed-files:id)
+               :where (and (= type "PaymentVerificationKeyShelley_ed25519") (in utxo $v1)
+                           (not (null path)))]
+              (cardano-tx-witness-query
+               (cardano-tx-get-in input-data 'witness))))
+    (--map (replace-regexp-in-string ".vkey$" ".skey" (car it)))))
 
 (defun cardano-tx-sign (tx-file witness-keys)
   "Sign a transaction file TX-FILE with WITNESS-KEYS."
