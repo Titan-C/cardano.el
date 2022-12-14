@@ -253,6 +253,11 @@ MONITOR the address if not nil."
       (goto-char (point-min))
       (switch-to-buffer (current-buffer)))))
 
+(defconst cardano-tx-db-font-lock-keywords
+  `((,(rx "NO") . font-lock-comment-face)
+    (,(rx (or "spend:" "reward:") ) . font-lock-string-face)
+    (,(rx "[" (= 8 hex) "]" ) . font-lock-builtin-face)))
+
 (defvar cardano-tx-db-addresses-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map "w" #'cardano-tx-db-address-toggle-watch)
@@ -267,9 +272,7 @@ MONITOR the address if not nil."
                                ("Address" 20 t)
                                ("cksum" 9 t)
                                ("Note" 0 nil)])
-  (setq font-lock-defaults `(((,(rx "NO") . font-lock-comment-face)
-                              (,(rx (or "spend:" "reward:") ) . font-lock-string-face)
-                              (,(rx "[" (= 8 hex) "]" ) . font-lock-builtin-face))))
+  (setq font-lock-defaults (list cardano-tx-db-font-lock-keywords))
   (tabulated-list-init-header))
 
 (defun cardano-tx-db-addresses ()
@@ -401,6 +404,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
                                ("Filename" 18 t)
                                ("Annotation" 0 t)])
   (add-hook 'tabulated-list-revert-hook #'cardano-tx-db-files--refresh nil t)
+  (setq font-lock-defaults (list cardano-tx-db-font-lock-keywords))
   (tabulated-list-init-header))
 
 (defun cardano-tx-db-typed-files ()
