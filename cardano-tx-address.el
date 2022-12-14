@@ -388,7 +388,8 @@ From extended key in `current-buffer'."
     (cardano-tx-address-derive-child path)
     (when (search-backward "_xsk1" nil t)
       (cardano-tx-address-public-key t))
-    (cdr (bech32-decode (buffer-string)))))
+    ;; Only 32 to drop chaincode
+    (seq-take (cdr (bech32-decode (buffer-string))) 32)))
 
 
 (defun cardano-tx-address-fingerprint (bech32-string)
