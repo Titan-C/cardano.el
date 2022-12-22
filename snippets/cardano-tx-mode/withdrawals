@@ -4,7 +4,7 @@
 # expand-env: ((yas-indent-line 'fixed))
 # --
 withdrawals:
-  - address: ${1:`(cardano-tx-address-staking (caddr (cardano-tx-address-stake-pick)))`}
+  - address: ${1:`(cardano-tx-address-staking (elt (cardano-tx-address-stake-pick) 5))`}
     amount:
       lovelace: ${1:$(cardano-tx-rewards yas-text)}
 

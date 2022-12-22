@@ -313,7 +313,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
 (defun cardano-tx-db-typed-files-where (column value)
   "Filters the typed files table on COLUMN by VALUE."
   (emacsql (cardano-tx-db)
-           `[:select [id type path description]
+           `[:select [id type path description cbor-hex]
              :from typed-files :where (= ,column '$s1)]
            value))
 

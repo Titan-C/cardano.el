@@ -16,6 +16,7 @@
 
 (require 'dash)
 (require 'bech32)
+(require 'seq)
 (require 'f)
 (require 'emacsql)
 (require 'emacsql-sqlite)
@@ -66,6 +67,10 @@
                   "hi.skey" "hi.vkey"
                   "stake.skey" "stake.vkey"
                   "there.skey" "there.vkey")))
+   (seq-let ( _ _ path _ cbor-hex) (car (cardano-tx-db-stake-keys))
+     ;; two ways to same result
+     (should (string= (cardano-tx-address-staking path)
+                      (cardano-tx-address-staking cbor-hex))))
    (should (equal 2 (length (cardano-tx-db-address--list))))))
 
 (ert-deftest address-new-hd-keys ()
