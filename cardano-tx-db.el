@@ -27,6 +27,7 @@
 
 (require 'org)
 (require 'dired)
+(require 'f)
 (require 'dash)
 (require 'yaml)
 (require 'emacsql)
@@ -362,6 +363,69 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
     (insert "\n* " headline " " type "\n" description "\n")
     (cardano-tx-db-insert-native-script-block type file-path)))
 
+(defun cardano-tx-db-file-write (file-id &optional filename)
+  "Write file of FILE-ID to FILENAME.
+Which defaults to know location or description on keyring."
+  (interactive (list (tabulated-list-get-id) nil))
+  (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
+    (seq-let (file-id type path description cbor-hex) result
+      (let ((filename
+             (cardano-tx-clean-filename
+              (or filename path
+                  (expand-file-name
+                   (cardano-tx-escape-non-alphanum-bracket
+                    (car (split-string description "\n" t  "[[:space:]]")))
+                   cardano-tx-db-keyring-dir))
+              cardano-tx-db-keyring-dir)))
+        (emacsql (cardano-tx-db)
+                 [:update typed-files
+                  :set (= path $s1)
+                  :where (= id $s2)]
+                 filename
+                 file-id)
+        (f-write
+         (json-serialize
+          (list :type type
+                :description description
+                :cborHex cbor-hex))
+         'utf-8 filename)
+        (when (eq (with-current-buffer (current-buffer)
+                    major-mode)
+                  'cardano-tx-db-files-mode)
+          (cardano-tx-db-files--refresh)
+          (tabulated-list-print t))))))
+
+(defun cardano-tx-db-file-delete (file-id)
+  "Delete data for FILE-ID. Optionally file too."
+  (interactive
+   (list (tabulated-list-get-id)))
+  (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
+    (seq-let (file-id _type path description) result
+      (emacsql (cardano-tx-db)
+               [:delete :from typed-files
+                :where (= id $s1)]
+               file-id)
+      (when (and path (file-exists-p path)
+                 (yes-or-no-p
+                  (format "Deleting entry %d '%s' from Database.\nDo you want to remove the file %s too?"
+                          file-id description path)))
+        (delete-file path))
+      (when (eq (with-current-buffer (current-buffer)
+                  major-mode)
+                'cardano-tx-db-files-mode)
+        (forward-line)
+        (cardano-tx-db-files--refresh)
+        (tabulated-list-print t)))))
+
+(defun cardano-tx-db-file-name-copy (file-id)
+  "Copy path for FILE-ID into `kill-ring'."
+  (interactive
+   (list (tabulated-list-get-id)))
+  (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
+    (seq-let (_id _type path) result
+      (when path
+        (message "Filename '%s' copied to `kill-ring'." (kill-new path))))))
+
 (defun cardano-tx-db-file-annotate (file-id)
   "Annotate data for FILE-ID."
   (interactive
@@ -395,6 +459,9 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
   (let ((map (make-sparse-keymap)))
     (define-key map "a" #'cardano-tx-db-file-annotate)
     (define-key map "o" #'cardano-tx-db-file-open)
+    (define-key map "w" #'cardano-tx-db-file-write)
+    (define-key map "c" #'cardano-tx-db-file-name-copy)
+    (define-key map "d" #'cardano-tx-db-file-delete)
     map))
 
 (define-derived-mode cardano-tx-db-files-mode tabulated-list-mode "Managed files"
