@@ -135,7 +135,7 @@ If RESET query the node again."
 
 (defun cardano-tx-witness-query (witness-list)
   "SQLite query union to include rows about explicitly declared in WITNESS-LIST."
-  (if-let ((witness (mapcar (lambda (str) `(like path ,(concat "%" str "%" ".vkey"))) witness-list)))
+  (if-let ((witness (mapcar (lambda (str) `(like path ,(concat "%" str "%"))) witness-list)))
       `[:union :select [path description cbor-hex] :from typed-files
         :where ,(if (> (length witness) 1)
                     `(or ,@witness)
@@ -171,7 +171,7 @@ Found secret key files and known hardware paths."
   (let (files hw)
     (pcase-dolist (`(,path ,desc) require-witness)
       (cond
-       ((and (null path)
+       ((and desc
              (string-match
               (rx "[" (group (+ hex)) "]") desc))
         (push (vector
@@ -179,7 +179,9 @@ Found secret key files and known hardware paths."
                (match-string 1 desc)
                (substring desc 10)) hw))
        ((file-exists-p (replace-regexp-in-string "\\.vkey$" ".skey" path))
-        (push (replace-regexp-in-string "\\.vkey$" ".skey" path) files))
+        (setq files
+              (cl-adjoin (replace-regexp-in-string "\\.vkey$" ".skey" path)
+                         files :test #'string=)))
        ((cardano-tx-log 'warn "Unknown signature file %s in %s" desc path))))
     (list files (cardano-tx-hw--signing-files hw))))
 
@@ -221,7 +223,7 @@ All the wallet address-file pairs in the keyring are tested."
           (hardware-device-witness (cl-loop repeat (length hardware-paths) collect (make-temp-file (file-name-base tx-file) nil ".witness"))))
       (apply #'cardano-tx-hw
              (append
-              (list "transaction" "exwitness" "--tx-file" tx-file
+              (list "transaction" "witness" "--tx-file" tx-file
                     "--sign-request" (thread-first hardware-paths
                                                    (vconcat)
                                                    (json-serialize)))

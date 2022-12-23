@@ -294,10 +294,10 @@ mint:
 (ert-deftest test-tx-witness-query ()
   (should (equal (cardano-tx-witness-query nil) []))
   (should (equal (cardano-tx-witness-query '("first"))
-                 [:union :select [path description cbor-hex] :from typed-files :where (like path "%first%.vkey")]))
+                 [:union :select [path description cbor-hex] :from typed-files :where (like path "%first%")]))
   (should (equal (cardano-tx-witness-query '("second" "first"))
                  [:union :select [path description cbor-hex] :from typed-files
-                  :where (or (like path "%second%.vkey") (like path "%first%.vkey"))])))
+                  :where (or (like path "%second%") (like path "%first%"))])))
 
 (ert-deftest test-witnesses ()
   (with-keyring

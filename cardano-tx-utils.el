@@ -24,7 +24,9 @@
 ;;
 ;;; Code:
 
+(require 'hex-util)
 (require 'dash)
+(require 'f)
 (require 'helm)
 (require 'json)
 (require 'subr-x)
@@ -136,6 +138,29 @@ Output SIZE in bits, default 224. Return as hexstring."
             file-name
           (cardano-tx-clean-filename (read-file-name "Pick a name for the file" dir)))
       file-name)))
+
+(defun cardano-tx-drop-chaincode (file)
+  "Create new key FILE without chaincode in case it has, otherwise pass."
+  (let ((data (json-parse-string (f-read file) :object-type 'alist)))
+    (if (not (string-suffix-p "_bip32"
+                              (cardano-tx-get-in data 'type)))
+        file
+      (let ((temp-file (make-temp-file "cardano-temp")))
+        (f-write
+         (json-serialize
+          (list (cons 'type
+                      (replace-regexp-in-string (rx (or "Extended" "_bip32")) "" (cardano-tx-get-in data "type")))
+                (cons 'cborHex
+                      (thread-first
+                        (cardano-tx-get-in data 'cborHex)
+                        (cbor->elisp)
+                        (decode-hex-string)
+                        (substring 0 32)
+                        (encode-hex-string)
+                        (cbor<-elisp)
+                        (encode-hex-string)))))
+         'utf-8 temp-file)
+        temp-file))))
 
 (provide 'cardano-tx-utils)
 ;;; cardano-tx-utils.el ends here

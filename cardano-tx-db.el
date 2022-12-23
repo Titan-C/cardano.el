@@ -145,7 +145,8 @@
 
 (defun cardano-tx-db-stake-keys ()
   "Return stake verification keys."
-  (cardano-tx-db-typed-files-where 'type "StakeVerificationKeyShelley_ed25519"))
+  (cardano-tx-db-typed-files-where 'type "Stake%VerificationKeyShelley_ed25519%" 'like))
+
 
 (defun cardano-tx-db-address--list ()
   "Return the list of all monitored addresses."
@@ -314,11 +315,11 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
     (emacsql (cardano-tx-db)
              [:insert-or-ignore :into typed-files :values $v1])))
 
-(defun cardano-tx-db-typed-files-where (column value)
-  "Filters the typed files table on COLUMN by VALUE."
+(defun cardano-tx-db-typed-files-where (column value &optional operator)
+  "Filters the typed files table on COLUMN by VALUE using OPERATOR, defaults =."
   (emacsql (cardano-tx-db)
            `[:select [id type path description cbor-hex]
-             :from typed-files :where (= ,column '$s1)]
+             :from typed-files :where (,(or operator '=) ,column '$s1)]
            value))
 
 (defun cardano-tx-db-dired-load-files ()

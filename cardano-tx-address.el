@@ -132,15 +132,15 @@ Optionally with the STAKE-KEY-FILE."
          (when stake-key-file
            (list "--stake-verification-key-file" stake-key-file))))
 
-(defun cardano-tx-address-stake-registration-cert (vkey-file &optional leave)
-  "Write stake address registration certificate from VKEY-FILE.
+(defun cardano-tx-address-stake-registration-cert (stake-vkey &optional leave)
+  "Write stake address registration certificate from STAKE-VKEY.
 If LEAVE deregister."
   (let* ((action (pcase leave
                    ((or :false (pred null)) "registration")
                    (_ "deregistration")))
-         (stake-registration-cert-file (concat vkey-file "." action ".cert")))
+         (stake-registration-cert-file (concat stake-vkey "." action ".cert")))
     (cardano-tx-cli "stake-address" (concat action "-certificate")
-                    "--stake-verification-key-file" (expand-file-name vkey-file)
+                    "--stake-verification-key-file" (cardano-tx-drop-chaincode (expand-file-name stake-vkey))
                     "--out-file" stake-registration-cert-file)
     stake-registration-cert-file))
 
@@ -149,7 +149,7 @@ If LEAVE deregister."
 Optionally define the STAKE-VKEY file."
   (let ((delegation-cert-file (make-temp-file "delegation" nil ".cert")))
     (cardano-tx-cli "stake-address" "delegation-certificate"
-                    "--stake-verification-key-file" (expand-file-name stake-vkey)
+                    "--stake-verification-key-file" (cardano-tx-drop-chaincode (expand-file-name stake-vkey))
                     "--stake-pool-id" pool-id
                     "--out-file" delegation-cert-file)
     delegation-cert-file))
