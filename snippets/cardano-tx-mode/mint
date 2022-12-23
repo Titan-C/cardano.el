@@ -17,8 +17,9 @@ mint:
       ${3:tokenname}: ${4:1}
 
 witness:
-  - ${1:`(file-name-base (read-file-name "Select verification key file: " cardano-tx-db-keyring-dir
-                          nil nil nil (lambda (n) (string-suffix-p ".vkey" n))))`}
+- ${1:`(completing-read "Which key should witness the mint? "
+          (cl-loop for (_id _type path) in (cardano-tx-db-typed-files-where 'type "Payment%Verification%" 'like)
+          when path collect (file-name-base it)))`}
 
 $0
 

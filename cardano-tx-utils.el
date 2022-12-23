@@ -120,17 +120,17 @@ Output SIZE in bits, default 224. Return as hexstring."
       (call-process-region (point-min) (point-max) "b2sum" t t nil "-l" (number-to-string size) "-b")
       (buffer-substring-no-properties 1 (1+ (/ size 4))))))
 
-(defun cardano-tx-escape-non-alphanum-bracket (str)
-  "Replace non alphanum and square brackets with underscore on str."
+(defun cardano-tx-escape-non-alphanum (str)
+  "Replace non alphanum or dot with underscore on str."
   (replace-regexp-in-string
-   (rx (+ (not (in alnum))))
+   (rx (+ (not (in alnum "."))))
    "_" str))
 
 (defun cardano-tx-clean-filename (filename &optional dir)
   "Remove any non alphanumeric or square braces from FILENAME."
   (let ((file-name
          (expand-file-name
-          (cardano-tx-escape-non-alphanum-bracket
+          (cardano-tx-escape-non-alphanum
            (file-name-nondirectory filename))
           (file-name-directory filename))))
     (if (file-exists-p file-name)

@@ -147,7 +147,6 @@
   "Return stake verification keys."
   (cardano-tx-db-typed-files-where 'type "Stake%VerificationKeyShelley_ed25519%" 'like))
 
-
 (defun cardano-tx-db-address--list ()
   "Return the list of all monitored addresses."
   (emacsql (cardano-tx-db) [:select [raw] :from addresses :where (= monitor 't)]))
@@ -374,8 +373,13 @@ Which defaults to know location or description on keyring."
              (cardano-tx-clean-filename
               (or filename path
                   (expand-file-name
-                   (cardano-tx-escape-non-alphanum-bracket
-                    (car (split-string description "\n" t  "[[:space:]]")))
+                   (cardano-tx-escape-non-alphanum
+                    (concat
+                     (car (split-string description "\n" t  "[[:space:]]"))
+                     (cond
+                      ((string-match "Verification" type) ".vkey")
+                      ((string-match "Signing" type) ".skey")
+                      (""))))
                    cardano-tx-db-keyring-dir))
               cardano-tx-db-keyring-dir)))
         (emacsql (cardano-tx-db)
