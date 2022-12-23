@@ -40,10 +40,11 @@
 (require 'yaml)
 (require 'yasnippet)
 (require 'readable-numbers)
-(require 'cardano-tx-cli)
-(require 'cardano-tx-db)
 (require 'cardano-tx-address)
 (require 'cardano-tx-assets)
+(require 'cardano-tx-cli)
+(require 'cardano-tx-db)
+(require 'cardano-tx-hw)
 (require 'cardano-tx-utils)
 
 (defconst cardano-tx-snippet-dir
@@ -135,40 +136,116 @@ If RESET query the node again."
 (defun cardano-tx-witness-query (witness-list)
   "SQLite query union to include rows about explicitly declared in WITNESS-LIST."
   (if-let ((witness (mapcar (lambda (str) `(like path ,(concat "%" str "%" ".vkey"))) witness-list)))
-      `[:union :select [path] :from typed-files
+      `[:union :select [path description cbor-hex] :from typed-files
         :where ,(if (> (length witness) 1)
                     `(or ,@witness)
                   (car witness))]
     []))
 
+(defun cardano-tx--utxos-to-spend (input-data)
+  "Return array of UTxOs to spend from INPUT-DATA."
+  (vconcat (let ((col (cardano-tx-get-in input-data 'collateral)))
+             (if (stringp col) (vector col) col))
+           (--map (cardano-tx-get-in it 'utxo)
+                  (cardano-tx-get-in input-data 'inputs))))
+
+(defun cardano-tx-hw--signing-files (path-desc)
+  (unless (null path-desc)
+    (let ((query [:with keys [desc fingerprint path-tail] :as [:values $v1]
+                  :select [note type path-tail cbor-hex] :from master-keys mk
+                  :join keys
+                  :on (= mk:fingerprint keys:fingerprint)
+                  :join typed-files
+                  :on (= description desc)]))
+      (cl-loop for (note type path-tail cbor-hex) in
+               (emacsql (cardano-tx-db) query path-desc)
+               when (string-prefix-p "HW" note)
+               collect `((type . ,type)
+                         (description . "HardwareWallet Signing File")
+                         (path . ,(concat (substring note 2) "/" path-tail))
+                         (cborXPubKeyHex . ,cbor-hex))))))
+
+(defun cardano-tx--witness-sources (require-witness)
+  "From REQUIRED-WITNESS return a 2-tuple.
+Found secret key files and known hardware paths."
+  (let (files hw)
+    (pcase-dolist (`(,path ,desc) require-witness)
+      (cond
+       ((and (null path)
+             (string-match
+              (rx "[" (group (+ hex)) "]") desc))
+        (push (vector
+               desc
+               (match-string 1 desc)
+               (substring desc 10)) hw))
+       ((file-exists-p (replace-regexp-in-string "\\.vkey$" ".skey" path))
+        (push (replace-regexp-in-string "\\.vkey$" ".skey" path) files))
+       ((cardano-tx-log 'warn "Unknown signature file %s in %s" desc path))))
+    (list files (cardano-tx-hw--signing-files hw))))
+
 (defun cardano-tx-witnesses (input-data)
   "Given the INPUT-DATA about to be spent.  Which wallets control them?
 All the wallet address-file pairs in the keyring are tested."
-  (->> (vconcat (let ((col (cardano-tx-get-in input-data 'collateral)))
-                       (if (stringp col) (vector col) col))
-                     (--map (cardano-tx-get-in it 'utxo)
-                            (cardano-tx-get-in input-data 'inputs)))
-    (emacsql (cardano-tx-db)
-             (vconcat
-              [:select :distinct [path] :from utxos
-               :join addresses :on (= addr-id addresses:id)
-               :join typed-files :on (= spend-key typed-files:id)
-               :where (and (= type "PaymentVerificationKeyShelley_ed25519") (in utxo $v1)
-                           (not (null path)))]
-              (cardano-tx-witness-query
-               (cardano-tx-get-in input-data 'witness))))
-    (--map (replace-regexp-in-string ".vkey$" ".skey" (car it)))))
+  (->> (cardano-tx--utxos-to-spend input-data)
+       (emacsql (cardano-tx-db)
+                (vconcat
+                 [:select :distinct [path description cbor-hex] :from utxos
+                  :join addresses :on (= addr-id addresses:id)
+                  :join typed-files :on (= spend-key typed-files:id)
+                  :where ;;(and (like type "Payment%VerificationKeyShelley_ed25519%"))
+                  (in utxo $v1)]
+                 (cardano-tx-witness-query
+                  (cardano-tx-get-in input-data 'witness))))
+       (cardano-tx--witness-sources)))
 
-(defun cardano-tx-sign (tx-file witness-keys)
-  "Sign a transaction file TX-FILE with WITNESS-KEYS."
+(defun cardano-tx--sign-all-local-files (tx-file secret-files)
+  "Sign a transaction file TX-FILE with SECRET-FILES."
   (let ((signed-file (concat tx-file ".signed")))
     (->> (list "transaction" "sign"
                "--tx-body-file" tx-file
-               (--map (list "--signing-key-file" it) witness-keys)
+               (--map (list "--signing-key-file" it) secret-files)
                "--out-file" signed-file)
          (flatten-tree)
          (apply #'cardano-tx-cli))
     signed-file))
+
+(defun cardano-tx--witness-and-assemple (tx-file witness-keys)
+  (seq-let (secret-files hardware-paths) witness-keys
+    (let ((secret-file-witness
+           (cl-loop for secret in secret-files
+                    for witness = (make-temp-file (file-name-base tx-file) nil ".witness")
+                    do (cardano-tx-cli "transaction" "witness" "--tx-body-file" tx-file
+                                       "--signing-key-file" secret
+                                       "--out-file" witness)
+                    collect witness))
+          (hardware-device-witness (cl-loop repeat (length hardware-paths) collect (make-temp-file (file-name-base tx-file) nil ".witness"))))
+      (apply #'cardano-tx-hw
+             (append
+              (list "transaction" "exwitness" "--tx-file" tx-file
+                    "--sign-request" (thread-first hardware-paths
+                                                   (vconcat)
+                                                   (json-serialize)))
+              cardano-tx-cli-network-args
+              (cl-loop for witness in hardware-device-witness nconc (list "--out-file" witness))))
+      (let ((signed-file (concat tx-file ".signed")))
+        (->> (list "transaction" "assemble"
+                   "--tx-body-file" tx-file
+                   (--map (list "--witness-file" it)
+                          (append secret-file-witness hardware-device-witness))
+                   "--out-file" signed-file)
+             (flatten-tree)
+             (apply #'cardano-tx-cli))
+        (cardano-tx-submit signed-file)))))
+
+(defun cardano-tx-sign (tx-file witness-keys)
+  "Sign a transaction file TX-FILE with WITNESS-KEYS."
+  (seq-let (secret-files hardware-paths) witness-keys
+    (if (and (null hardware-paths) secret-files)
+        (cardano-tx--sign-all-local-files tx-file secret-files)
+      (make-thread
+       (lambda ()
+         (message "Witnessing transaction. Check your hardware device.")
+         (cardano-tx--witness-and-assemple tx-file witness-keys))))))
 
 (defun cardano-tx-hash-script-data (datum)
   "Hash the DATUM."
@@ -349,7 +426,7 @@ It produces the actual policy-id from the MINT-ROWS."
          (tx-outs (cardano-tx-get-in input-data 'outputs))
          (build (seq-some (lambda (tx-out) (cardano-tx-get-in tx-out 'change)) tx-outs)))
     (mapc #'cardano-tx-save-datum tx-outs)
-    (list "transaction" (if build "build" "build-raw") "--babbage-era"
+    (list "transaction" (if build "build" "build-raw") "--babbage-era" "--cddl-format"
           (->> 'inputs
                (cardano-tx-get-in input-data)
                (mapcar #'cardano-tx--in-args))
@@ -368,7 +445,7 @@ It produces the actual policy-id from the MINT-ROWS."
           (cardano-tx--plutus-args input-data)
           (when (and build (cardano-tx-get-in input-data 'witness))
             (->> (cardano-tx-witnesses input-data)
-                 length number-to-string
+                 flatten-tree length number-to-string
                  (list "--witness-override")))
           (-some->> 'certificates
             (cardano-tx-get-in input-data)
@@ -397,10 +474,11 @@ It produces the actual policy-id from the MINT-ROWS."
 
 (defun cardano-tx-submit (tx-file)
   "Submit transaction on TX-FILE."
-  (message "%s\nTxId: %s. Copied to kill-ring"
-           (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
-           (kill-new (cardano-tx-view-or-hash tx-file t)))
-  (cardano-tx-db-utxo-reset (cardano-tx-db)))
+  (when (and (stringp tx-file) (file-exists-p tx-file))
+    (message "%s\nTxId: %s. Copied to kill-ring"
+             (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
+             (kill-new (cardano-tx-view-or-hash tx-file t)))
+    (cardano-tx-db-utxo-reset (cardano-tx-db))))
 
 (defun cardano-tx--parse-yaml (str)
   "From yaml STR to alist."

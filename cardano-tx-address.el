@@ -388,9 +388,7 @@ From extended key in `current-buffer'."
     (cardano-tx-address-derive-child path)
     (when (search-backward "_xsk1" nil t)
       (cardano-tx-address-public-key t))
-    ;; Only 32 to drop chaincode
-    (seq-take (cdr (bech32-decode (buffer-string))) 32)))
-
+    (cdr (bech32-decode (buffer-string)))))
 
 (defun cardano-tx-address-fingerprint (bech32-string)
   "First 4 bytes of sha256sum in hex for BECH32-STRING values."
@@ -401,15 +399,19 @@ From extended key in `current-buffer'."
     (thread-last
       derivations
       (mapcar (lambda (it)
-                (vector (if (string-suffix-p "2/0" it)
-                            "StakeVerificationKeyShelley_ed25519"
-                          "PaymentVerificationKeyShelley_ed25519")
-                        (format "[%s]%s" fingerprint it)
-                        (thread-first
-                          (apply #'unibyte-string (cardano-tx-address-derive-public-key master-key it))
-                          (encode-hex-string)
-                          (cbor<-elisp)
-                          (encode-hex-string)))))
+                (let* ((pubkey (cardano-tx-address-derive-public-key master-key it))
+                       (is-extended (< 32 (length pubkey)))
+                       (type (format "%s%sVerificationKeyShelley_ed25519%s"
+                                     (if (string-suffix-p "2/0" it) "Stake" "Payment")
+                                     (if is-extended "Extended" "")
+                                     (if is-extended "_bip32" ""))))
+                  (vector type
+                          (format "[%s]%s" fingerprint it)
+                          (thread-first
+                            (apply #'unibyte-string pubkey)
+                            (encode-hex-string)
+                            (cbor<-elisp)
+                            (encode-hex-string))))))
       (emacsql (cardano-tx-db)
                [:insert-or-ignore
                 :into typed_files
@@ -422,7 +424,7 @@ From extended key in `current-buffer'."
 NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
 ACCOUNT-PATTERN is a SQL pattern to match the account. Defaults to [%]%"
   (cl-flet ((hash (cbor-hex)
-                  (thread-last
+                  (thread-first
                     (cbor->elisp cbor-hex)
                     (decode-hex-string)
                     (substring 0 32) ;; make sure no chaincode sneaks in

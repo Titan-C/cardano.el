@@ -2,6 +2,7 @@
 ("transaction"
 "build"
 "--babbage-era"
+"--cddl-format"
 "--tx-in"
 "8ecc6e1276b29f83023e0ead1f199727d6987d88cab60ff3fd9a164f4c408b2d#0"
 "--tx-in"

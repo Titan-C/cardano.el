@@ -49,7 +49,7 @@
 
 (defvar cardano-tx-cli-skip-network-args
   (list "key" "key-gen" "key-hash" "txid" "view" "build-raw" "hash-script-data"
-        "version" "policyid"
+        "version" "policyid" "assemble"
         "registration-certificate"
         "deregistration-certificate"
         "delegation-certificate")

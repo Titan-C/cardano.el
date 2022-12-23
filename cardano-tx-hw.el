@@ -45,7 +45,9 @@
 (defun cardano-tx-hw-reply (result)
   "Process the RESULT value from an external process and the `current-buffer'."
   (if (= result 0)
-      (json-parse-string (buffer-string))
+      (or (ignore-errors
+            (json-parse-string (buffer-string)))
+          (string-trim (buffer-string)))
     (let ((err-msg (buffer-string)))
       (cardano-tx-log 'error err-msg)
       (error err-msg))))
