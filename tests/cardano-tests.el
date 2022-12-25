@@ -93,19 +93,6 @@
                         (cardano-tx-address-load "PaymentVerificationKeyShelley_ed25519" t)))
    (should (equal 1 (length (cardano-tx-db-address--list))))))
 
-(ert-deftest address-validate-hd-path ()
-  (pcase-dolist (`(,input ,result)
-                 '(("5H" "5H")
-                   ("5/2H/8" "5/2H/8")
-                   ("5 2h_8" "5/2H/8")
-                   ("5/2'_8" "5/2H/8")
-                   ("PA" nil)
-                   ("" nil)
-                   (5 nil)
-                   ((4 5h 2) "4/5H/2")
-                   ((4 5H 2) "4/5H/2")))
-    (should (equal (cardano-tx-address--validate-hd-path input) result))))
-
 (ert-deftest address-new-script ()
   (with-keyring
    (cardano-tx-address-new-key-files nil "hi")

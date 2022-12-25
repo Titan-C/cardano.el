@@ -30,10 +30,11 @@
 (require 'cbor)
 (require 'hex-util)
 (require 'subr-x)
-(require 'cardano-tx-db)
-(require 'cardano-tx-utils)
+(require 'cardano-tx-bip32)
 (require 'cardano-tx-cli)
+(require 'cardano-tx-db)
 (require 'cardano-tx-log)
+(require 'cardano-tx-utils)
 
 (defun cardano-tx-address--short (address)
   "Shorten ADDRESS for user display."
@@ -232,26 +233,6 @@ NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet."
   :type 'file
   :group 'cardano)
 
-(defun cardano-tx-address-path->str (key-path &optional separator)
-  "KEY-PATH is list of path symbols on numbers.
-Return joined string by SEPARATOR, defaults to `/'."
-  (replace-regexp-in-string
-   "h" "H"
-   (mapconcat #'prin1-to-string key-path (or separator "/"))))
-
-(defun cardano-tx-address--validate-hd-path (path)
-  "Validate HD derivation PATH and return it normalized.
-PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
-  (let ((split-path
-         (--> (cond
-               ((consp path) (cardano-tx-address-path->str path))
-               ((stringp path) (replace-regexp-in-string (rx (or "h" "'")) "H" path))
-               (t ""))
-              (split-string it (rx (or whitespace "/" "_")))
-              (cl-remove-if-not #'cardano-tx-nw-p it))))
-    (when (and split-path (--every (string-match-p (rx bol (1+ digit) (optional "H") eol) it) split-path))
-      (string-join split-path "/"))))
-
 (defun cardano-tx-address--db-load-master-key (key-source)
   (when-let ((root
               (cond
@@ -375,7 +356,7 @@ From extended key in `current-buffer'."
    (split-string (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
   (cardano-tx-db-load-files
    (mapcan (lambda (path)
-             (when-let ((path (cardano-tx-address--validate-hd-path path)))
+             (when-let ((path (cardano-tx-bip32-validate-hd-path path)))
                (cardano-tx-address-new-hd-key path)))
            paths)))
 

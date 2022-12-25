@@ -74,9 +74,13 @@
     (goto-char (point-min))
     (when (re-search-forward "Usage:" nil 'end)
       (backward-sentence))
-    (let ((err-msg (string-trim (buffer-substring-no-properties (point-min) (point)))))
+    (let ((err-msg (string-trim
+                    (buffer-substring-no-properties (point-min)
+                                                    (if (= (point) (point-min))
+                                                        (point-max)
+                                                      (point))))))
       (cardano-tx-log 'error err-msg)
-      (error err-msg))))
+      (user-error err-msg))))
 
 (defun cardano-tx-cli-pretty-yaml-message (obj)
   "Encode OBJ into yaml and display on mini-buffer."
