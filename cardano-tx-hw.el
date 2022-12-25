@@ -72,20 +72,22 @@ Extended public keys are stored directly on the database as master-keys."
     (emacsql (cardano-tx-db)
              [:insert-or-ignore :into master-keys
               [fingerprint note data]
-              :values $v1])))
+              :values $v1]))
+  (message "Imported public keys %s" path-spec))
 
 (defun cardano-tx-hw--master-keys ()
   "Completing read to pick one of the loaded master keys."
-  (let* ((accounts (emacsql (cardano-tx-db) [:select [id fingerprint note data] :from master-keys]))
+  (let* ((accounts (emacsql (cardano-tx-db) [:select [id fingerprint note data]
+                                             :from master-keys
+                                             :where (like data "acct_%")]))
          (select-accounts (mapcar
                            (lambda (row)
                              (seq-let (_ fingerprint note) row
-                               (cons (concat (propertize fingerprint 'face 'font-lock-builtin-face) " " note)
+                               (cons (concat "[" (propertize fingerprint 'face 'font-lock-builtin-face) "]" note)
                                      row)))
                            accounts))
          (pick (completing-read "Derive from key: " select-accounts)))
     (assoc pick select-accounts)))
-
 
 (provide 'cardano-tx-hw)
 ;;; cardano-tx-hw.el ends here

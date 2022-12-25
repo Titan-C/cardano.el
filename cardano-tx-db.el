@@ -237,9 +237,9 @@ MONITOR the address if not nil."
                     :where (= addresses:raw $s1)]
                    address))))
     (with-current-buffer (generate-new-buffer "*Address Annotation*")
-      (setq-local header-line-format (format "Address: %s" address))
       (org-mode)
       (use-local-map (copy-keymap org-mode-map))
+      (setq-local header-line-format (format "Address: %s" address))
       (when result
         (insert (cadr result) "\n"))
       (thread-last
@@ -307,8 +307,7 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
                                   file))
                   (list
                    (vector nil (alist-get 'type key-json)
-                           (concat (file-name-base file) "\n"
-                                   (alist-get 'description key-json))
+                           (alist-get 'description key-json)
                            (alist-get 'cborHex key-json)
                            file))))))
     (emacsql (cardano-tx-db)
@@ -363,45 +362,44 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
     (insert "\n* " headline " " type "\n" description "\n")
     (cardano-tx-db-insert-native-script-block type file-path)))
 
+(defun cardano-tx-db--new-filename (type description &rest prefered-options)
+  "Propose a new filename for file of TYPE & DESCRIPTION.
+PREFERED-OPTIONS are names that take precedence."
+  (cardano-tx-clean-filename
+   (or (car (flatten-tree prefered-options))
+       (expand-file-name
+        (cardano-tx-escape-non-alphanum
+         (concat
+          (car (split-string description "\n" t  "[[:space:]]"))
+          (cond
+           ((string-match "Verification" type) ".vkey")
+           ((string-match "Signing" type) ".skey")
+           (""))))
+        cardano-tx-db-keyring-dir))
+   cardano-tx-db-keyring-dir))
+
 (defun cardano-tx-db-file-write (file-id &optional filename)
   "Write file of FILE-ID to FILENAME.
 Which defaults to know location or description on keyring."
   (interactive (list (tabulated-list-get-id) nil))
   (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
-    (seq-let (file-id type path description cbor-hex) result
-      (let ((filename
-             (cardano-tx-clean-filename
-              (or filename path
-                  (expand-file-name
-                   (cardano-tx-escape-non-alphanum
-                    (concat
-                     (car (split-string description "\n" t  "[[:space:]]"))
-                     (cond
-                      ((string-match "Verification" type) ".vkey")
-                      ((string-match "Signing" type) ".skey")
-                      (""))))
-                   cardano-tx-db-keyring-dir))
-              cardano-tx-db-keyring-dir)))
+    (seq-let (file-id type path description cborHex) result
+      (let ((filename (cardano-tx-db--new-filename type description filename path)))
         (emacsql (cardano-tx-db)
                  [:update typed-files
                   :set (= path $s1)
                   :where (= id $s2)]
                  filename
                  file-id)
-        (f-write
-         (json-serialize
-          (list :type type
-                :description description
-                :cborHex cbor-hex))
-         'utf-8 filename)
+        (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
         (when (eq (with-current-buffer (current-buffer)
                     major-mode)
                   'cardano-tx-db-files-mode)
           (cardano-tx-db-files--refresh)
           (tabulated-list-print t))))))
 
-(defun cardano-tx-db-file-delete (file-id)
-  "Delete data for FILE-ID. Optionally file too."
+(defun cardano-tx-db-file-delete (file-id &optional force)
+  "Delete data for FILE-ID.  Optionally FORCE file too."
   (interactive
    (list (tabulated-list-get-id)))
   (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
@@ -411,9 +409,10 @@ Which defaults to know location or description on keyring."
                 :where (= id $s1)]
                file-id)
       (when (and path (file-exists-p path)
-                 (yes-or-no-p
-                  (format "Deleting entry %d '%s' from Database.\nDo you want to remove the file %s too?"
-                          file-id description path)))
+                 (or force
+                     (yes-or-no-p
+                      (format "Deleting entry %d '%s' from Database.\nDo you want to remove the file %s too?"
+                              file-id description path))))
         (delete-file path))
       (when (eq (with-current-buffer (current-buffer)
                   major-mode)
@@ -437,9 +436,9 @@ Which defaults to know location or description on keyring."
    (list (tabulated-list-get-id)))
   (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
     (with-current-buffer (generate-new-buffer "*File description*")
-      (setq-local header-line-format (format "Description of file: %s" (elt result 2)))
       (org-mode)
       (insert (elt result 3) "\n")
+      (setq-local header-line-format (format "Description of file: %s" (elt result 2)))
       (let ((cur (point)))
         (cardano-tx-db-insert-native-script-block (elt result 1) (elt result 2))
         (add-text-properties cur (point-max) '(read-only t))
@@ -485,6 +484,67 @@ Which defaults to know location or description on keyring."
   (with-current-buffer (get-buffer-create "*Cardano managed files*")
     (cardano-tx-db-files-mode)
     (cardano-tx-db-files--refresh)
+    (tabulated-list-print)
+    (pop-to-buffer (current-buffer))))
+
+;;; Master keys
+
+(defun cardano-tx-db-master-keys--refresh ()
+  "Query managed master keys from db and prepare them for table print."
+  (->>
+   (emacsql (cardano-tx-db)
+            [:select [id fingerprint note] :from master-keys])
+   (mapcar (lambda (row)
+             (seq-let (_ fingerprint note) row
+               (list row
+                     (vector
+                      (concat "[" fingerprint "]")
+                      (or (car (split-string note "\n")) ""))))))
+   (setq tabulated-list-entries)))
+
+(defun cardano-tx-db-master-keys-annotate ()
+  "Annotate data for master keys on point."
+  (interactive)
+  (if-let ((row (tabulated-list-get-id)))
+      (seq-let (id fingerprint note) row
+        (with-current-buffer (generate-new-buffer (format "*Master key [%s]*" fingerprint))
+          (org-mode)
+          (use-local-map (copy-keymap org-mode-map))
+          (setq-local header-line-format (format "Notes on key: %s" fingerprint))
+          (insert note "\n")
+          (local-set-key "\C-c\C-c"
+                         (lambda ()
+                           (interactive)
+                           (emacsql (cardano-tx-db)
+                                    [:update master-keys
+                                     :set (= note $s1)
+                                     :where (= id $s2)]
+                                    (string-trim
+                                     (buffer-substring-no-properties (point-min) (point-max)))
+                                    id)
+                           (kill-buffer)))
+          (switch-to-buffer (current-buffer))))))
+
+(defvar cardano-tx-db-master-keys-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "a" #'cardano-tx-db-master-keys-annotate)
+    map))
+
+(define-derived-mode cardano-tx-db-master-keys-mode tabulated-list-mode "Managed extended public keys"
+  "Major mode for working with extended public keys."
+  :interactive nil
+  (setq tabulated-list-format [("Fingerprint" 15 t)
+                               ("Annotation" 0 t)])
+  (add-hook 'tabulated-list-revert-hook #'cardano-tx-db-master-keys--refresh nil t)
+  (setq font-lock-defaults (list cardano-tx-db-font-lock-keywords))
+  (tabulated-list-init-header))
+
+(defun cardano-tx-db-master-keys ()
+  "Open buffer listing managed extended public keys."
+  (interactive)
+  (with-current-buffer (get-buffer-create "*Cardano extended public keys*")
+    (cardano-tx-db-master-keys-mode)
+    (cardano-tx-db-master-keys--refresh)
     (tabulated-list-print)
     (pop-to-buffer (current-buffer))))
 

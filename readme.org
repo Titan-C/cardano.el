@@ -2,8 +2,8 @@
 * Motivation
 You interact with the Cardano blockchain through transactions. Your wallet
 software takes care of the common user tasks, yet for advanced endeavors you
-need the =cardano-cli=. However, it gets really cumbersome as transactions grow
-in complexity. Bash scripts tame the problem only for a while, because their
+need the =cardano-cli=. Which gets really cumbersome as transactions grow in
+complexity. Bash scripts tame the problem only for a while, because their
 limitation is the very thing they offer: Bash scripts automate repetitive tasks
 at the cost of flexibility.
 
@@ -11,9 +11,9 @@ The command line is a great tool, yet if I ever write more than 4 words on the
 command line I go crazy. The command line is, for me, a tool for quick queries
 not a work environment. Bash scripts are good to automate simple things and keep
 dependencies low. However, I go crazy when maintaining large bash scripts.  Bash
-scripts enslave you to the one dimensionality of the command line. Even when
-editing those scripts on an editor you must mark line breaks, and keep track of
-quoting your variables and input.
+scripts enslave you to the one dimensionality of the command line, because even
+when editing those scripts on an editor you must mark line breaks, and keep
+track of quoting your variables and input.
 
 I want a tool that lets me craft my transactions, a powerful tool to interact
 with the =cardano-node=, which has all the features, does not get cumbersome as
@@ -57,7 +57,7 @@ winner.
 
 * Installation
 ** Dependencies
-*** Cardano Node >= 1.35.3
+*** Cardano Node >= 1.35.4
 You need a running Cardano node post Vasil Hard-Fork you can connect to.
 
 For Mainnet follow the standard guide
@@ -68,7 +68,14 @@ It manages the key generation for HD wallets
 This package is the backend for Daedalus. It is another service that needs
 to run in the background, with it you have access to rich wallet
 functionalities.
+**** Cardano-hw-cli (optional)
+To work with hardware wallets you need a patched version of the cardano-hw-cli
+from vacuumlabs. This patch allows the editor to directly push information to
+that utility and avoids managing so many files. The patched binary is in this
+repository
+https://github.com/arsmagna-xyz/cardano-hw-cli/tree/witness-request
 
+Make sure to build the witness-request branch.
 *** Emacs 28
 This is the latest release. Install it and also the following packages.
 
@@ -218,13 +225,28 @@ take the necessary precautions to secure your files, work on air gapped machine.
 The function =cardano-tx-address-new-hd-key-files= prompts for a derivation path
 for your key, you can still call this with many space separated paths. Following
 CIP-11 the path =1852H/1815H/0H/2/0= will generate the staking key.
+
+*** Hardware Wallets
+Installing the patched version from [[https://github.com/arsmagna-xyz/cardano-hw-cli/tree/witness-request][cardano-hw-cli]] in from arsmagna-xyz on the
+=witness-request= branch you can request the hardware wallet public keys by
+calling =M-x cardano-tx-hw-request-extended-pubkeys=. The intention is to only
+request the public keys following BIP32 until the account index, that is the
+path depth of 3. E.g.
+#+begin_quote
+1852H/1815H/0H
+#+end_quote
+
+The editor stores this extended public key on the database and manages the key
+derivations, on demand in the database. You can access the stored keys by calling
+=cardano-tx-db-master-keys=, which open a table view of the registered extended
+public keys.
 *** Registering key files
 If you generated some key files previous to using cardano.el or from previous
 versions of it, before its use of a SQLite database you need to register those
 keys to the database. The easiest way is using =dired= to mark the files you
-want to register and the interactively calling =cardano-tx-db-dired-load-files=.
-You can also register Cardano native simple scripts (multisigs/timelocks) and
-Plutus script files.
+want to register and then interactively calling
+=cardano-tx-db-dired-load-files=.  You can also register Cardano native simple
+scripts (multisigs/timelocks) and Plutus script files.
 
 To visualize the files registered in the database call the interactive function
 =cardano-tx-db-typed-files=. This opens a table view of all registered files.

@@ -150,6 +150,7 @@ If RESET query the node again."
                   (cardano-tx-get-in input-data 'inputs))))
 
 (defun cardano-tx-hw--signing-files (path-desc)
+  "Collect all signing file objects that match given PATH-DESC."
   (unless (null path-desc)
     (let ((query [:with keys [desc fingerprint path-tail] :as [:values $v1]
                   :select [note type path-tail cbor-hex] :from master-keys mk
@@ -166,7 +167,7 @@ If RESET query the node again."
                          (cborXPubKeyHex . ,cbor-hex))))))
 
 (defun cardano-tx--witness-sources (require-witness)
-  "From REQUIRED-WITNESS return a 2-tuple.
+  "From REQUIRE-WITNESS return a 2-tuple.
 Found secret key files and known hardware paths."
   (let (files hw)
     (pcase-dolist (`(,path ,desc) require-witness)
@@ -212,6 +213,9 @@ All the wallet address-file pairs in the keyring are tested."
     signed-file))
 
 (defun cardano-tx--witness-and-assemple (tx-file witness-keys)
+  "For each of WITNESS-KEYS witness TX-FILE.
+Assemble all witnesses into transaction & submit it."
+
   (seq-let (secret-files hardware-paths) witness-keys
     (let ((secret-file-witness
            (cl-loop for secret in secret-files
@@ -306,7 +310,7 @@ All the wallet address-file pairs in the keyring are tested."
 (defun cardano-tx-save-native-script (native-script)
   "Convert a NATIVE-SCRIPT object to JSON-file."
   (let ((script (make-temp-file "native-script" nil)))
-    (f-write (json-encode native-script) 'utf-8 script)
+    (cardano-tx-write-json native-script script)
     (let ((new-name (concat (file-name-directory script) (cardano-tx-policyid script) ".script")))
       (rename-file script new-name 'overwrite)
       new-name)))
@@ -377,7 +381,7 @@ It produces the actual policy-id from the MINT-ROWS."
 (defun cardano-tx--metadata-args (metadata)
   "Generate metadata command for METADATA."
   (let ((metadata-file (make-temp-file "metadata" nil ".json")))
-    (f-write (json-encode metadata) 'utf-8 metadata-file)
+    (cardano-tx-write-json metadata metadata-file)
     (list "--metadata-json-file" metadata-file) ))
 
 (defun cardano-tx--validity-interval (validity-interval)

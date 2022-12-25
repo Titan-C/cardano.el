@@ -28,6 +28,11 @@
 (require 'cardano-wallet)
 (require 'ert)
 
+(ert-deftest test-alist-expansion ()
+  (let ((hi 5) (fes 6))
+    (should (equal (cardano-tx-alist hi fes)
+                   '((hi . 5) (fes . 6))))))
+
 (ert-deftest test-parse-token-bundle ()
   (should (equal (cardano-tx-assets-parse-token-bundle [["61" 5] ["70" 2]])
                  '(("a" . 5) ("p". 2))))

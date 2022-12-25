@@ -76,7 +76,7 @@ PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
 (defun cardano-tx-bip32--parse-index (idx)
   "Parse indexes for derivation.
 IDX can be a single integer string or a range a..b.
-In both cases can be sufixed with H for hardened.
+In both cases can be suffixed with H for hardened.
 Returns BIP32 integer list."
   (let ((numbers (pcase idx
                    ((and n (rx bol (1+ digit) (? "H") eol)) (list (string-to-number n)))
@@ -86,10 +86,12 @@ Returns BIP32 integer list."
         (mapcar (lambda (x) (+ x (ash 1 31))) numbers) numbers)))
 
 (defun cardano-tx-bip32--parse-derivation-path (path-spec)
+  "Parse PATH-SPEC string definition to list of BIP32 integers."
   (mapcar #'cardano-tx-bip32--parse-index
           (split-string path-spec "/" t)))
 
 (defun cardano-tx-bip32-expand-derivation-paths (path-spec)
+  "Expand PATH-SPEC specification into a list of BIP32 integer lists."
   (let ((index-specs (nreverse (cardano-tx-bip32--parse-derivation-path path-spec))))
     (thread-last
       (seq-reduce

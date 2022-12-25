@@ -33,6 +33,7 @@
 (require 'cardano-tx-bip32)
 (require 'cardano-tx-cli)
 (require 'cardano-tx-db)
+(require 'cardano-tx-hw)
 (require 'cardano-tx-log)
 (require 'cardano-tx-utils)
 
@@ -276,29 +277,27 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
                               "--with-chain-code")))
 
 
-(defun cardano-tx-address--json-priv-key (xpriv-key pub-key type-name)
+(defun cardano-tx-address--priv-key (xpriv-key pub-key type-name)
   "JSON string for an extended XPRIV-KEY with PUB-KEY of TYPE-NAME."
   (cl-assert (and (arrayp xpriv-key) (arrayp pub-key)))
-  (json-encode
-   (list :type (concat type-name
-                       "ExtendedSigningKeyShelley_ed25519_bip32")
-         :description ""
-         :cborHex (-> (concat (seq-subseq xpriv-key 0 64)
-                              pub-key
-                              (seq-subseq xpriv-key 64))
-                      encode-hex-string
-                      cbor<-elisp
-                      encode-hex-string))))
+  (list :type (concat type-name
+                      "ExtendedSigningKeyShelley_ed25519_bip32")
+        :description ""
+        :cborHex (-> (concat (seq-subseq xpriv-key 0 64)
+                             pub-key
+                             (seq-subseq xpriv-key 64))
+                     encode-hex-string
+                     cbor<-elisp
+                     encode-hex-string)))
 
-(defun cardano-tx-address--json-pub-key (pub-key type-name)
+(defun cardano-tx-address--pub-key (pub-key type-name)
   "JSON string for a PUB-KEY file of TYPE-NAME."
   (cl-assert (arrayp pub-key))
-  (json-encode
-   (list :type (concat type-name
-                       "VerificationKeyShelley_ed25519")
-         :description (concat type-name " Verification Key")
-         :cborHex (-> pub-key encode-hex-string
-                      cbor<-elisp encode-hex-string))))
+  (list :type (concat type-name
+                      "VerificationKeyShelley_ed25519")
+        :description (concat type-name " Verification Key")
+        :cborHex (-> pub-key encode-hex-string
+                     cbor<-elisp encode-hex-string)))
 
 (defun cardano-tx-address-cli-keys (file-name)
   "Save `cardano-tx-cli' key-pairs labeled by FILE-NAME.
@@ -316,12 +315,12 @@ From extended key in `current-buffer'."
       (if (or (file-exists-p v-file) (file-exists-p v-file))
           (cardano-tx-log 'warn "Skip creating %S key pair, because it already exists." file-name)
         ;; Write secret signing key
-        (-> (cardano-tx-address--json-priv-key xpriv-key pub-key type-name)
-            (f-write 'utf-8 s-file))
+        (-> (cardano-tx-address--priv-key xpriv-key pub-key type-name)
+            (cardano-tx-write-json s-file))
         (set-file-modes s-file #o600)
         ;; Write verification key
-        (-> (cardano-tx-address--json-pub-key pub-key type-name)
-            (f-write 'utf-8 v-file))
+        (-> (cardano-tx-address--pub-key pub-key type-name)
+            (cardano-tx-write-json v-file))
         (set-file-modes v-file #o600)
         (cardano-tx-log 'info "Created new key pair: %S" file-name))
       (list v-file s-file))))
@@ -346,25 +345,10 @@ From extended key in `current-buffer'."
                (cardano-tx-address-new-hd-key path)))
            paths)))
 
-(defun cardano-tx-address--db-load-master-key (key-source)
-  ;; Dangerous?
-  (when-let ((root
-              (cond
-               ((file-exists-p key-source) (with-temp-buffer
-                                             (insert-file-contents key-source)
-                                             (cardano-tx-address-master-key-from-phrase)
-                                             (buffer-string)))
-               ((ignore-error user-error (bech32-decode key-source)) key-source))))
-    (emacsql (cardano-tx-db)
-             [:insert-or-ignore :into master-keys
-              [fingerprint encrypted data]
-              :values $v1]
-             (vector (cardano-tx-blake2-sum (concat (cdr (bech32-decode root))) 32) nil root))))
-
 ;; Derive account addresses
 ;;
-
 (defun cardano-tx-address-derive-public-key (root path)
+  "Derive public key from ROOT along PATH."
   (with-temp-buffer
     (insert root)
     (cardano-tx-address-derive-child path)
@@ -372,7 +356,8 @@ From extended key in `current-buffer'."
       (cardano-tx-address-public-key t))
     (cdr (bech32-decode (buffer-string)))))
 
-(defun cardano-tx-address-hd-db-register-vkeys (master-key derivations)
+(defun cardano-tx-address-hw-register-vkeys (master-key derivations)
+  "Generate public key files for each of path DERIVATIONS from bech32 MASTER-KEY."
   (let ((fingerprint (cardano-tx-blake2-sum (concat (cdr (bech32-decode master-key))) 32)))
     (thread-last
       derivations
@@ -382,25 +367,34 @@ From extended key in `current-buffer'."
                        (type (format "%s%sVerificationKeyShelley_ed25519%s"
                                      (if (string-suffix-p "2/0" it) "Stake" "Payment")
                                      (if is-extended "Extended" "")
-                                     (if is-extended "_bip32" ""))))
-                  (vector type
-                          (format "[%s]%s" fingerprint it)
-                          (thread-first
-                            (apply #'unibyte-string pubkey)
-                            (encode-hex-string)
-                            (cbor<-elisp)
-                            (encode-hex-string))))))
-      (emacsql (cardano-tx-db)
-               [:insert-or-ignore
-                :into typed_files
-                [type description cbor_hex]
-                :values $v1]))))
+                                     (if is-extended "_bip32" "")))
+                       (description (format "[%s]%s" fingerprint it))
+                       (cborHex (thread-first
+                                  (apply #'unibyte-string pubkey)
+                                  (encode-hex-string)
+                                  (cbor<-elisp)
+                                  (encode-hex-string)))
+                       (filename (cardano-tx-db--new-filename type description)))
+                  (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
+                  filename)))
+      (cardano-tx-db-load-files))))
+
+(defun cardano-tx-address-hw-derive-key-files ()
+  "Generate public key files for registered Hardware device extended keys."
+  (interactive)
+  (let* ((xpub (cardano-tx-hw--master-keys))
+         (derivations
+          (cardano-tx-bip32-expand-derivation-paths
+           (read-string (format "Derivation path (2..4 for ranges) %s/"
+                                (car (split-string (car xpub))))))))
+    (cardano-tx-address-hw-register-vkeys (elt xpub 4) derivations)))
+
 
 (defun cardano-tx-address-hd-addresses (&optional network-id account-pattern)
   "Gather all Hierarchical deterministic addresses.
 
 NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
-ACCOUNT-PATTERN is a SQL pattern to match the account. Defaults to [%]%"
+ACCOUNT-PATTERN is a SQL pattern to match the account.  Defaults to [%]%"
   (cl-flet ((hash (cbor-hex)
                   (thread-first
                     (cbor->elisp cbor-hex)

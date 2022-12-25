@@ -61,6 +61,16 @@
     ((guard (listp acc)) (alist-get entry acc nil nil #'string=))
     ((guard (hash-table-p acc)) (gethash entry acc))))
 
+(defun cardano-tx-write-json (obj filename)
+  "Serialize OBJ to FILENAME as json."
+  (f-write (json-encode obj) 'utf-8 filename))
+
+(defmacro cardano-tx-alist (&rest named-data-args)
+  "Create an alist where each NAMED-DATA-ARGS receives its own symbol."
+  (cons 'list
+        (cl-loop for item in named-data-args
+                       collect `(cons ',item ,item))))
+
 (defun cardano-tx-pick (options-name candidates)
   "Simple multiple CANDIDATES picker of type OPTIONS-NAME."
   (helm
@@ -109,7 +119,7 @@ CALLBACK processes the response."
 
 (defun cardano-tx-blake2-sum (string-or-buffer &optional size)
   "Calculate blake2 checksum for STRING-OR-BUFFER.
-Output SIZE in bits, default 224. Return as hexstring."
+Output SIZE in bits, default 224. Return as hex-string."
   (let ((size (or size 224)))
     (if (= (mod size 8) 0)
         (with-temp-buffer
@@ -120,48 +130,48 @@ Output SIZE in bits, default 224. Return as hexstring."
            (t (error "Wrong type")))
           (call-process-region (point-min) (point-max) "b2sum" t t nil "-l" (number-to-string size) "-b")
           (buffer-substring-no-properties 1 (1+ (/ size 4))))
-      (user-error "Blake2 requires an output size multiple of 8."))))
+      (user-error "Blake2 requires an output size multiple of 8"))))
 
 (defun cardano-tx-escape-non-alphanum (str)
-  "Replace non alphanum or dot with underscore on str."
+  "Replace non alphanumeric or dot with underscore on STR."
   (replace-regexp-in-string
    (rx (+ (not (in alnum "."))))
    "_" str))
 
 (defun cardano-tx-clean-filename (filename &optional dir)
-  "Remove any non alphanumeric or square braces from FILENAME."
+  "Remove any non alphanumeric or square braces from FILENAME.
+Optionally place filename in DIR."
   (let ((file-name
          (expand-file-name
           (cardano-tx-escape-non-alphanum
            (file-name-nondirectory filename))
           (file-name-directory filename))))
     (if (file-exists-p file-name)
-        (if (yes-or-no-p (format "File %s exists. Overwrite?" filename))
+        (if (yes-or-no-p (format "File %s exists.  Overwrite?" filename))
             file-name
           (cardano-tx-clean-filename (read-file-name "Pick a name for the file" dir)))
       file-name)))
 
 (defun cardano-tx-drop-chaincode (file)
-  "Create new key FILE without chaincode in case it has, otherwise pass."
+  "Create new key FILE without chain-code in case it has, otherwise pass."
   (let ((data (json-parse-string (f-read file) :object-type 'alist)))
     (if (not (string-suffix-p "_bip32"
                               (cardano-tx-get-in data 'type)))
         file
       (let ((temp-file (make-temp-file "cardano-temp")))
-        (f-write
-         (json-serialize
-          (list (cons 'type
-                      (replace-regexp-in-string (rx (or "Extended" "_bip32")) "" (cardano-tx-get-in data "type")))
-                (cons 'cborHex
-                      (thread-first
-                        (cardano-tx-get-in data 'cborHex)
-                        (cbor->elisp)
-                        (decode-hex-string)
-                        (substring 0 32)
-                        (encode-hex-string)
-                        (cbor<-elisp)
-                        (encode-hex-string)))))
-         'utf-8 temp-file)
+        (cardano-tx-write-json
+         (list (cons 'type
+                     (replace-regexp-in-string (rx (or "Extended" "_bip32")) "" (cardano-tx-get-in data "type")))
+               (cons 'cborHex
+                     (thread-first
+                       (cardano-tx-get-in data 'cborHex)
+                       (cbor->elisp)
+                       (decode-hex-string)
+                       (substring 0 32)
+                       (encode-hex-string)
+                       (cbor<-elisp)
+                       (encode-hex-string))))
+         temp-file)
         temp-file))))
 
 (provide 'cardano-tx-utils)
