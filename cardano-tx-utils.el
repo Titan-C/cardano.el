@@ -111,14 +111,16 @@ CALLBACK processes the response."
   "Calculate blake2 checksum for STRING-OR-BUFFER.
 Output SIZE in bits, default 224. Return as hexstring."
   (let ((size (or size 224)))
-    (with-temp-buffer
-      (set-buffer-multibyte nil)
-      (cond
-       ((stringp string-or-buffer) (insert string-or-buffer))
-       ((bufferp string-or-buffer) (insert-buffer-substring string-or-buffer))
-       (t (error "Wrong type")))
-      (call-process-region (point-min) (point-max) "b2sum" t t nil "-l" (number-to-string size) "-b")
-      (buffer-substring-no-properties 1 (1+ (/ size 4))))))
+    (if (= (mod size 8) 0)
+        (with-temp-buffer
+          (set-buffer-multibyte nil)
+          (cond
+           ((stringp string-or-buffer) (insert string-or-buffer))
+           ((bufferp string-or-buffer) (insert-buffer-substring string-or-buffer))
+           (t (error "Wrong type")))
+          (call-process-region (point-min) (point-max) "b2sum" t t nil "-l" (number-to-string size) "-b")
+          (buffer-substring-no-properties 1 (1+ (/ size 4))))
+      (user-error "Blake2 requires an output size multiple of 8."))))
 
 (defun cardano-tx-escape-non-alphanum (str)
   "Replace non alphanum or dot with underscore on str."

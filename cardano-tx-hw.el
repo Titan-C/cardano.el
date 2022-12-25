@@ -27,10 +27,12 @@
 
 (require 'hex-util)
 (require 'seq)
-(require 'cardano-tx-cli)
-(require 'cardano-tx-log)
+(require 'bech32)
 (require 'cardano-tx-bip32)
-(require 'cardano-tx-address)
+(require 'cardano-tx-cli)
+(require 'cardano-tx-db)
+(require 'cardano-tx-log)
+(require 'cardano-tx-utils)
 
 (defcustom cardano-tx-hw-command (executable-find "cardano-hw-cli")
   "Which `cardano-tx-hw-cli' binary to use."
@@ -50,9 +52,10 @@
 (defun cardano-tx-hw--parse-extended-pubkey (pubkey-data)
   "Prepare PUBKEY-DATA from HW device response for database ingestion."
   (seq-let (path extended-pubkey) pubkey-data
-    (let ((root (bech32-encode "acct_xvk" (decode-hex-string extended-pubkey))))
+    (let* ((raw-key (decode-hex-string extended-pubkey))
+           (root (bech32-encode "acct_xvk" raw-key)))
       (vector
-       (cardano-tx-address-fingerprint root)
+       (cardano-tx-blake2-sum raw-key 32)
        (concat "HW" (cardano-tx-bip32->path-str path))
        root))))
 

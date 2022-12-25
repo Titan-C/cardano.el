@@ -233,20 +233,6 @@ NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet."
   :type 'file
   :group 'cardano)
 
-(defun cardano-tx-address--db-load-master-key (key-source)
-  (when-let ((root
-              (cond
-               ((file-exists-p key-source) (with-temp-buffer
-                                             (insert-file-contents key-source)
-                                             (cardano-tx-address-master-key-from-phrase)
-                                             (buffer-string)))
-               ((ignore-error user-error (bech32-decode key-source)) key-source))))
-    (emacsql (cardano-tx-db)
-             [:insert-or-ignore :into master-keys
-              [fingerprint encrypted data]
-              :values $v1]
-             (vector (cardano-tx-address-fingerprint root) nil root))))
-
 (defun cardano-tx-address-gen-recovery-phrase (size)
   "Create the recovery phrase of SIZE words for HD wallet.
 Save it unencrypted on `cardano-tx-db-keyring-dir'."
@@ -360,6 +346,21 @@ From extended key in `current-buffer'."
                (cardano-tx-address-new-hd-key path)))
            paths)))
 
+(defun cardano-tx-address--db-load-master-key (key-source)
+  ;; Dangerous?
+  (when-let ((root
+              (cond
+               ((file-exists-p key-source) (with-temp-buffer
+                                             (insert-file-contents key-source)
+                                             (cardano-tx-address-master-key-from-phrase)
+                                             (buffer-string)))
+               ((ignore-error user-error (bech32-decode key-source)) key-source))))
+    (emacsql (cardano-tx-db)
+             [:insert-or-ignore :into master-keys
+              [fingerprint encrypted data]
+              :values $v1]
+             (vector (cardano-tx-blake2-sum (concat (cdr (bech32-decode root))) 32) nil root))))
+
 ;; Derive account addresses
 ;;
 
@@ -371,12 +372,8 @@ From extended key in `current-buffer'."
       (cardano-tx-address-public-key t))
     (cdr (bech32-decode (buffer-string)))))
 
-(defun cardano-tx-address-fingerprint (bech32-string)
-  "First 4 bytes of sha256sum in hex for BECH32-STRING values."
-  (substring (secure-hash 'sha256 (concat (cdr (bech32-decode bech32-string)))) 0 8 ))
-
 (defun cardano-tx-address-hd-db-register-vkeys (master-key derivations)
-  (let ((fingerprint (cardano-tx-address-fingerprint master-key)))
+  (let ((fingerprint (cardano-tx-blake2-sum (concat (cdr (bech32-decode master-key))) 32)))
     (thread-last
       derivations
       (mapcar (lambda (it)
