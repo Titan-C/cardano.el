@@ -90,17 +90,21 @@ This is only available on TX preview buffers.")
 (defun cardano-tx--utxo-contents (utxo-row)
   "Human readable contents of UTXO-ROW."
   (-let (((utxo addr lovelaces assets datumhash datum addr-note) utxo-row))
-    (-> (list
-         utxo
-         addr
-         addr-note
-         (cardano-tx-assets-format-tokens
-          (cl-acons "lovelace" lovelaces assets))
-         (-some->> datumhash (format "datumhash: %s" ))
-         (-some->> datum (format "data: %s" )))
-        (string-join "\n")
-        (string-trim))))
-
+    (with-temp-buffer
+      (yaml-mode)
+      (-> (list
+           utxo
+           addr
+           addr-note
+           (cardano-tx-assets-format-tokens
+            (cl-acons "lovelace" lovelaces assets))
+           (-some->> datumhash (format "datumhash: %s" ))
+           (-some->> datum (format "data: %s" )))
+          (string-join "\n")
+          (string-trim)
+          (insert))
+      (font-lock-ensure)
+      (buffer-string))))
 
 (defun cardano-tx-utxo-entry (utxo spend-type script-path typed datum)
   "Builds an input entry of UTXO.
@@ -163,7 +167,7 @@ If RESET query the node again."
                when (string-prefix-p "HW" note)
                collect `((type . ,type)
                          (description . "HardwareWallet Signing File")
-                         (path . ,(concat (substring note 2) "/" path-tail))
+                         (path . ,(concat (car (split-string (substring note 2) nil t)) "/" path-tail))
                          (cborXPubKeyHex . ,cbor-hex))))))
 
 (defun cardano-tx--witness-sources (require-witness)
@@ -215,8 +219,9 @@ All the wallet address-file pairs in the keyring are tested."
 (defun cardano-tx--witness-and-assemple (tx-file witness-keys)
   "For each of WITNESS-KEYS witness TX-FILE.
 Assemble all witnesses into transaction & submit it."
-
   (seq-let (secret-files hardware-paths) witness-keys
+    (when hardware-paths
+      (cardano-tx-hw "transaction" "transform" "--tx-file" tx-file "--out-file" tx-file))
     (let ((secret-file-witness
            (cl-loop for secret in secret-files
                     for witness = (make-temp-file (file-name-base tx-file) nil ".witness")
