@@ -204,11 +204,6 @@ spending key type, confirm whether to watch the new address and which reward key
 you want to use. All key file and addresses are stored in the SQLite database in
 the =cardano.db= file.
 
-The command =cardano-tx-db-addresses= opens a table view of all your know addresses.
-The keyboard shortcut =c= copies the address in the row your point is. =w=
-toggles whether that address is watched in your UTxO set. =a= lets you write a
-comment for that particular address.
-
 *** Hierarchical Deterministic Wallets :optional:
 You can also install [[https://github.com/input-output-hk/cardano-addresses][cardano-addresses]] and let this tool help you manage your
 keys following the CIP-3 specification, and CIP-11.
@@ -226,7 +221,9 @@ The function =cardano-tx-address-new-hd-key-files= prompts for a derivation path
 for your key, you can still call this with many space separated paths. Following
 CIP-11 the path =1852H/1815H/0H/2/0= will generate the staking key.
 
-*** Hardware Wallets
+As in the previous section you can create the corresponding addresses calling
+interactively =cardano-tx-address-load=.
+*** Hardware Wallets (Experimental)
 Installing the patched version from [[https://github.com/arsmagna-xyz/cardano-hw-cli/tree/witness-request][cardano-hw-cli]] in from arsmagna-xyz on the
 =witness-request= branch you can request the hardware wallet public keys by
 calling =M-x cardano-tx-hw-request-extended-pubkeys=. The intention is to only
@@ -237,9 +234,37 @@ path depth of 3. E.g.
 #+end_quote
 
 The editor stores this extended public key on the database and manages the key
-derivations, on demand in the database. You can access the stored keys by calling
-=cardano-tx-db-master-keys=, which open a table view of the registered extended
-public keys.
+derivations, on demand in the database. You can access the stored keys by
+calling =cardano-tx-db-master-keys=, which open a table view of the registered
+extended public keys. Likewise to the HD wallets, to derive and register the
+payment and staking verification keys you must first call
+=cardano-tx-address-hw-derive-key-files=. There select which extended account
+key do you want to derive from and define a the paths along which to derive this
+keys. In this case you can use the expansion syntax for paths with =..= marking
+an inclusive range. For example
+#+begin_quote
+1852H/1815H/0H/0..1/0..3
+#+end_quote
+Expands to
+#+begin_quote
+1852H/1815H/0H/0/0
+1852H/1815H/0H/0/1
+1852H/1815H/0H/0/2
+1852H/1815H/0H/0/3
+1852H/1815H/0H/1/0
+1852H/1815H/0H/1/1
+1852H/1815H/0H/1/2
+1852H/1815H/0H/1/3
+#+end_quote
+Don't forget to derive the staking path which terminates in =2/0=.
+
+Once you have your verification keys registered it is time to create the
+corresponding addresses. In this case there is a special function that is
+account preserving for each of the extended public keys from the hardware
+device. Call =cardano-tx-address-hw-load= and select the extended public key
+account for which to generate the address. It will generate addresses for all
+registered keys in the database that belong to that account.
+
 *** Registering key files
 If you generated some key files previous to using cardano.el or from previous
 versions of it, before its use of a SQLite database you need to register those
@@ -260,8 +285,10 @@ directly from this view.
 | a        | =cardano-tx-db-file-annotate= | Add a note to the file |
 
 *** Manage addresses
-=cardano-tx-address-load= calculates addresses from registered files and loads them
-on the address database. Call it after registering new files.
+=cardano-tx-address-load= calculates addresses from registered files and loads
+them on the address database. Call it after registering new files. This doesn't
+work for files originating from the Hardware device as they produce extended
+keys. For those files use =cardano-tx-address-hw-load=.
 
 To visualize addresses loaded into your database call =cardano-tx-db-addresses=.
 This opens a view with all registered addresses. You can toggle which ones to
@@ -270,9 +297,9 @@ annotation.
 
 | shortcut | function                             |
 |----------+--------------------------------------|
-| w        | =cardano-tx-db-address-toggle-watch= |
-| c        | =cardano-tx-db-address-copy=         |
 | a        | =cardano-tx-db-address-annotate=     |
+| c        | =cardano-tx-db-address-copy=         |
+| w        | =cardano-tx-db-address-toggle-watch= |
 
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using

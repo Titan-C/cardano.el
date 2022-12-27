@@ -88,8 +88,8 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
                             "SimpleScriptV2"
                             "PlutusScriptV1")
                           nil t)
-         (cons (yes-or-no-p "Watch the created addresses?")
-               (cadr (cardano-tx-address-stake-pick t)))))
+         (seq-let (_name id _type path desc) (cardano-tx-address-stake-pick t)
+           (list (yes-or-no-p "Watch the created addresses?") id path desc))))
   (-some->> (cardano-tx-db-typed-files-where 'type spending-type)
     (mapcar (-lambda ((id _type payment-key desc))
               (vector nil
@@ -389,12 +389,16 @@ From extended key in `current-buffer'."
                                 (car (split-string (car xpub))))))))
     (cardano-tx-address-hw-register-vkeys (elt xpub 4) derivations)))
 
-
-(defun cardano-tx-address-hd-addresses (&optional network-id account-pattern)
+(defun cardano-tx-address-hw-load (account-pattern network-id)
   "Gather all Hierarchical deterministic addresses.
 
-NETWORK-ID is an int < 32. Defaults to 0 testnet, 1 is used for mainnet.
-ACCOUNT-PATTERN is a SQL pattern to match the account.  Defaults to [%]%"
+ACCOUNT-PATTERN is a SQL pattern to match the account.
+NETWORK-ID is an int < 32. 0 for testnet, 1 is used for mainnet."
+  (interactive
+   (seq-let (_name _id fingerprint) (cardano-tx-hw--master-keys)
+     (list
+      (concat "[" fingerprint "]%")
+      (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))))
   (cl-flet ((hash (cbor-hex)
                   (thread-first
                     (cbor->elisp cbor-hex)
