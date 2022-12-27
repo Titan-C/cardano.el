@@ -39,6 +39,7 @@
 (require 'cardano-tx-utils)
 (require 'cardano-tx-address)
 (require 'cardano-tx-db)
+(require 'cardano-tx-hw)
 (require 'cardano-tx)
 
 ;; Silence byte-compiler.
@@ -220,7 +221,7 @@ If JSON-DATA default to post unless METHOD is defined."
   "Major mode for managing wallets."
   :interactive nil
   (cl-flet ((sorter (lambda (col) (cardano-wallet-sort-readable-number col))))
-    (setq tabulated-list-format `[("Name" 10 t)
+    (setq tabulated-list-format `[("Name" 26 t)
                                   ("ID" 10 t)
                                   ("Total" 15 ,(sorter 2) :right-align t)
                                   ("Available" 15 ,(sorter 3) :right-align t)
@@ -385,6 +386,23 @@ If JSON-DATA default to post unless METHOD is defined."
    (list :name name
          :mnemonic_sentence mnemonic
          :passphrase passphrase)))
+
+(defun cardano-wallet-register ()
+  "Register a new wallet from the known extended public key accounts."
+  (interactive)
+  (cardano-wallet
+   "wallets"
+   #'cardano-wallet-show
+   "POST"
+   (seq-let (name _id _fingerprint _note data) (cardano-tx-hw--master-keys)
+     (thread-last
+       data
+       (bech32-decode)
+       (cdr)
+       (apply #'unibyte-string)
+       (encode-hex-string)
+       (list :name (car (split-string name))
+             :account_public_key)))))
 
 (defun cardano-wallet-monitor (name xpub)
   "Register a new wallet under NAME for given XPUB in hex."

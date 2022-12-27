@@ -358,7 +358,9 @@ From extended key in `current-buffer'."
 
 (defun cardano-tx-address-hw-register-vkeys (master-key derivations)
   "Generate public key files for each of path DERIVATIONS from bech32 MASTER-KEY."
-  (let ((fingerprint (cardano-tx-blake2-sum (concat (cdr (bech32-decode master-key))) 32)))
+  (let ((fingerprint
+         (cardano-tx-hw-fingerprint
+          (concat (cdr (bech32-decode master-key))))))
     (thread-last
       derivations
       (mapcar (lambda (it)

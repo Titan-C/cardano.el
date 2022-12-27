@@ -49,13 +49,17 @@
       (or (ignore-errors (json-parse-string response))
           response))))
 
+(defun cardano-tx-hw-fingerprint (xpub-bytestring)
+  "Fingerprint XPUB-BYTESTRING, being first 8 chars of wallet-id."
+  (substring (cardano-tx-blake2-sum xpub-bytestring 160) 0 8))
+
 (defun cardano-tx-hw--parse-extended-pubkey (pubkey-data)
   "Prepare PUBKEY-DATA from HW device response for database ingestion."
   (seq-let (path extended-pubkey) pubkey-data
     (let* ((raw-key (decode-hex-string extended-pubkey))
            (root (bech32-encode "acct_xvk" raw-key)))
       (vector
-       (cardano-tx-blake2-sum raw-key 32)
+       (cardano-tx-hw-fingerprint raw-key)
        (concat "HW" (cardano-tx-bip32->path-str path))
        root))))
 
