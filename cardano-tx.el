@@ -246,17 +246,16 @@ Assemble all witnesses into transaction & submit it."
                    "--out-file" signed-file)
              (flatten-tree)
              (apply #'cardano-tx-cli))
-        (cardano-tx-submit signed-file)))))
+        signed-file))))
 
 (defun cardano-tx-sign (tx-file witness-keys)
   "Sign a transaction file TX-FILE with WITNESS-KEYS."
   (seq-let (secret-files hardware-paths) witness-keys
     (if (and (null hardware-paths) secret-files)
         (cardano-tx--sign-all-local-files tx-file secret-files)
-      (make-thread
-       (lambda ()
-         (message "Witnessing transaction. Check your hardware device.")
-         (cardano-tx--witness-and-assemple tx-file witness-keys))))))
+      (progn
+        (message "Witnessing transaction. Check your hardware device.")
+        (cardano-tx--witness-and-assemple tx-file witness-keys)))))
 
 (defun cardano-tx-hash-script-data (datum)
   "Hash the DATUM."
@@ -488,8 +487,7 @@ It produces the actual policy-id from the MINT-ROWS."
   (when (and (stringp tx-file) (file-exists-p tx-file))
     (message "%s\nTxId: %s. Copied to kill-ring"
              (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
-             (kill-new (cardano-tx-view-or-hash tx-file t)))
-    (cardano-tx-db-utxo-reset (cardano-tx-db))))
+             (kill-new (cardano-tx-view-or-hash tx-file t)))))
 
 (defun cardano-tx--parse-yaml (str)
   "From yaml STR to alist."
@@ -532,10 +530,12 @@ It produces the actual policy-id from the MINT-ROWS."
            (tx-file (cardano-tx--build input-data)))
       (if preview
           (cardano-tx-review-before-submit tx-file (current-buffer))
-        (thread-last (cardano-tx-witnesses input-data)
-                     (cardano-tx-sign tx-file)
-                     cardano-tx-submit)
-        (kill-buffer))
+        (progn
+          (thread-last (cardano-tx-witnesses input-data)
+                       (cardano-tx-sign tx-file)
+                       (cardano-tx-submit))
+          (kill-buffer)
+          (cardano-tx-db-utxo-reset (cardano-tx-db))))
     (error "Something is wrong.  Cannot parse the file")))
 
 (defun cardano-tx-preview (tx-file)
