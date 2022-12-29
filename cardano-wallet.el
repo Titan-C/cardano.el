@@ -30,10 +30,11 @@
 ;; Provide an interface to the cardano-wallet service
 ;;; Code:
 
+(require 'dash)
 (require 'hex-util)
+(require 'subr-x)
 (require 'url)
 (require 'yaml)
-(require 'dash)
 (require 'yaml-mode)
 (require 'readable-numbers)
 (require 'cardano-tx-utils)
@@ -91,34 +92,45 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet-addresses--refresh ()
   "Refresh the address list."
-  (let ((known-addrs
-         (emacsql (cardano-tx-db)
-                  [:select [raw id monitor note] :from addresses
-                   :where (in raw $v1)]
-                  (cl-map 'vector (lambda (it) (cardano-tx-get-in it "id"))
-                          cardano-wallet--buffer-response))))
-    (->> cardano-wallet--buffer-response
-         (seq-map (lambda (res)
-                    (let* ((deriv (-> (cardano-tx-get-in res "derivation_path")
-                                      (seq-drop 2) ;; remove standard 1852H/1815H
-                                      (string-join "/")))
-                           (state (cardano-tx-get-in res "state"))
-                           (address (cardano-tx-get-in res "id"))
-                           (db-info (cardano-tx-get-in known-addrs address)))
-                      (list (or (car db-info) deriv)
-                            (vector
-                             (if (elt db-info 1) "YES" "NO")
-                             address
-                             (substring address -8)
-                             (concat
-                              (if (string= state "used")
-                                  (propertize deriv 'face 'font-lock-keyword-face)
-                                deriv)
-                              (-some--> db-info (elt it 2)
-                                        (string-remove-prefix deriv it)
-                                        (cardano-tx-nw-p it)
-                                        (format " -- %s" it))))))))
-         (setq tabulated-list-entries))))
+  (thread-last
+    cardano-wallet--buffer-response
+    (mapcar
+     (-lambda ((&alist 'id 'derivation_path))
+       (vector id (string-join (seq-drop derivation_path 3) "/"))))
+    (emacsql (cardano-tx-db)
+             [:with wallet [addr path] :as [:values $v1]
+              :select [monitor addr note path] :from wallet
+              :left-join addresses :on (= addr raw)])
+    (seq-map
+     (lambda (row)
+       (seq-let (monitor address note path) row
+         (list path
+               (vector
+                (if monitor "YES" "NO")
+                address
+                (substring address -8)
+                (or note path))))))
+    (setq tabulated-list-entries)))
+
+(defun cardano-wallet-derive-files-for-address ()
+  (interactive)
+  (when-let ((path (tabulated-list-get-id))
+             (hw-xpub
+              (-some-->
+                  (cardano-tx-get-in cardano-wallet-current 'id)
+                (substring it 0 8)
+                (emacsql (cardano-tx-db) [:select [fingerprint data] :from master-keys
+                                          :where (= fingerprint $s1)]
+                         it)
+                (car it))))
+
+    (cardano-tx-address-hw-register-vkeys (cadr hw-xpub) (list path))
+    (cardano-tx-address-hw-load
+     (concat "[" (car hw-xpub) "]%")
+     (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))
+    (forward-line)
+    (cardano-wallet-addresses--refresh)
+    (tabulated-list-print t)))
 
 (defun cardano-wallet-address--refresh-query (&optional _arg _noconfirm)
   "Query for registered addresses and `revert-buffer'."
@@ -136,6 +148,8 @@ If JSON-DATA default to post unless METHOD is defined."
   (with-current-buffer (get-buffer-create "*Cardano Wallet Addresses*")
     (cardano-tx-db-addresses-mode)
     (setq-local cardano-wallet-current wallet)
+    (use-local-map (copy-keymap cardano-tx-db-addresses-mode-map))
+    (local-set-key "i" #'cardano-wallet-derive-files-for-address)
     (add-hook 'tabulated-list-revert-hook #'cardano-wallet-addresses--refresh nil t)
     (setq revert-buffer-function #'cardano-wallet-address--refresh-query)
     (cardano-wallet-address--refresh-query)
