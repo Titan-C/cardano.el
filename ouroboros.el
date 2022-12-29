@@ -367,12 +367,5 @@ Specify the NETWORK-MAGIC."
     (emacs-lisp-mode)
     (display-buffer (current-buffer))))
 
-(ert-deftest ouroboros-hand-shake ()
-  (let* ((con (ouroboros-connect "/tmp/listen.ouroboros" 1097911063)))
-    (ouroboros-local con 'acquire 'tip)
-    (ouroboros-local con 'query [0 [2 [1]]]) ;; Era
-    (ouroboros-local con 'release)
-    (ouroboros-local con 'done)))
-
 (provide 'ouroboros)
 ;;; ouroboros.el ends here
