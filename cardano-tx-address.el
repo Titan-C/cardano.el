@@ -111,6 +111,16 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
          (when stake-key
            (list "--stake-verification-key-file" stake-key))))
 
+(defun cardano-tx-address--hash (cbor-hex)
+  "Calculate the hash of a CBOR-HEX verification key encoded bytestring."
+  (thread-first
+    cbor-hex
+    (cbor->elisp)
+    (decode-hex-string)
+    (substring 0 32) ;; make sure no chaincode sneaks in
+    (cardano-tx-blake2-sum)
+    (decode-hex-string)))
+
 (defun cardano-tx-address-staking (vkey-file-or-cbor-hex)
   "Construct staking address for key under VKEY-FILE-OR-CBOR-HEX."
   (if (file-exists-p vkey-file-or-cbor-hex)
@@ -119,11 +129,7 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
     (cardano-tx-address-build nil nil
                               (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1)
                               'keyhash
-                              (-> (cbor->elisp vkey-file-or-cbor-hex)
-                                  (decode-hex-string)
-                                  (substring 0 32) ;; make sure no chaincode sneaks in
-                                  (cardano-tx-blake2-sum)
-                                  (decode-hex-string)))))
+                              (cardano-tx-address--hash vkey-file-or-cbor-hex))))
 
 (defun cardano-tx-address-from-script (filename &optional stake-key-file)
   "Calculate the address of a script residing on FILENAME.
@@ -401,32 +407,25 @@ NETWORK-ID is an int < 32. 0 for testnet, 1 is used for mainnet."
      (list
       (concat "[" fingerprint "]%")
       (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))))
-  (cl-flet ((hash (cbor-hex)
-                  (thread-first
-                    (cbor->elisp cbor-hex)
-                    (decode-hex-string)
-                    (substring 0 32) ;; make sure no chaincode sneaks in
-                    (cardano-tx-blake2-sum)
-                    (decode-hex-string))))
-    (thread-last
-      (emacsql (cardano-tx-db)
-               [:select [pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex]
-                :from typed-files pay
-                :join typed-files stake
-                :where (and (like pay:type "Payment%") (like pay:description $s1)
-                            (like stake:type "Stake%") (like stake:description $s1))]
-               (or account-pattern "[%]%"))
-      (mapcar (lambda (row)
-                (seq-let (pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex) row
-                  (vector nil
-                          (cardano-tx-address-build 'keyhash
-                                                    (hash pay:cbor-hex) network-id
-                                                    'keyhash
-                                                    (hash stake:cbor-hex))
-                          pay:id stake:id nil
-                          (format "spend: %s -- reward: %s" pay:description stake:description)))))
-      (emacsql (cardano-tx-db)
-               [:insert-or-ignore :into addresses :values $v1]))))
+  (thread-last
+    (emacsql (cardano-tx-db)
+             [:select [pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex]
+              :from typed-files pay
+              :join typed-files stake
+              :where (and (like pay:type "Payment%") (like pay:description $s1)
+                          (like stake:type "Stake%") (like stake:description $s1))]
+             (or account-pattern "[%]%"))
+    (mapcar (lambda (row)
+              (seq-let (pay:id pay:description pay:cbor-hex stake:id stake:description stake:cbor-hex) row
+                (vector nil
+                        (cardano-tx-address-build 'keyhash
+                                                  (cardano-tx-address--hash pay:cbor-hex) network-id
+                                                  'keyhash
+                                                  (cardano-tx-address--hash stake:cbor-hex))
+                        pay:id stake:id nil
+                        (format "spend: %s -- reward: %s" pay:description stake:description)))))
+    (emacsql (cardano-tx-db)
+             [:insert-or-ignore :into addresses :values $v1])))
 
 (provide 'cardano-tx-address)
 ;;; cardano-tx-address.el ends here
