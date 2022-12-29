@@ -117,13 +117,12 @@ If JSON-DATA default to post unless METHOD is defined."
   (when-let ((path (tabulated-list-get-id))
              (hw-xpub
               (-some-->
-                  (cardano-tx-get-in cardano-wallet-current 'id)
+                  (cardano-wallet-id cardano-wallet-current)
                 (substring it 0 8)
                 (emacsql (cardano-tx-db) [:select [fingerprint data] :from master-keys
                                           :where (= fingerprint $s1)]
                          it)
                 (car it))))
-
     (cardano-tx-address--new-hd-key (cadr hw-xpub) path)
     (cardano-tx-address-hw-load
      (concat "[" (car hw-xpub) "]%")
@@ -474,20 +473,84 @@ If JSON-DATA default to post unless METHOD is defined."
          (tabulated-list-print))
        "DELETE"))))
 
+(defun cardano-wallet--used-left-to-register-keys (fingerprint)
+  (lambda (json)
+    (thread-last
+      json
+      (mapcar
+       (-lambda ((&alist 'state 'derivation_path))
+         (when (string= state "used")
+           (let ((path-tail (string-join (seq-drop derivation_path 3) "/")))
+             (vector fingerprint path-tail (format "[%s]%s" fingerprint path-tail))))))
+      (delq nil)
+      (emacsql (cardano-tx-db)
+               [:with used-keys [fingerprint path-tail desc] :as [:values $v1]
+                :select [data path-tail] :from used-keys
+                :join master-keys mk
+                :where (and (not (in desc [:select description :from typed-files]))
+                            (= mk:fingerprint used-keys:fingerprint))
+                :order-by [(asc data)]])
+      (mapc (-lambda ((key path-tail))
+              (cardano-tx-address--new-hd-key key path-tail))))))
+
 (defun cardano-wallet-tx-finish ()
   "Process buffer into a transaction, sign it and open PREVIEW."
   (interactive)
-  (let* ((input-data (cardano-tx--input-buffer))
+  (let* ((wallet-id (cardano-wallet-id cardano-wallet-tx--wallet))
+         (input-data (cardano-tx--input-buffer))
          (outputs (cardano-tx-get-in input-data 'outputs))
-         (tx-buffer (current-buffer)))
+         (tx-buffer (current-buffer))
+         (hw-xpub
+          (-some-->
+              wallet-id
+            (substring it 0 8)
+            (emacsql (cardano-tx-db) [:select [fingerprint note] :from master-keys
+                                      :where (= fingerprint $s1)]
+                     it)
+            (car it))))
+    (when hw-xpub
+      (cardano-wallet
+       (format "wallets/%s/addresses" wallet-id)
+       (cardano-wallet--used-left-to-register-keys (car hw-xpub))))
     (cardano-wallet
      (concat "wallets/"
-             (cardano-wallet-id cardano-wallet-tx--wallet)
-             "/transactions")
-     (lambda (json) (cardano-wallet-show json) (kill-buffer tx-buffer))
+             wallet-id
+             (concat "/transactions" (if hw-xpub "-construct" "")))
+     (lambda (json)
+       (cardano-wallet-show json)
+       (when hw-xpub
+         (cardano-wallet--process-tx (car hw-xpub) json))
+       (kill-buffer tx-buffer))
      "POST"
      `(:payments ,(cl-map 'vector #'cardano-wallet-payment outputs)
-       :passphrase ,(read-passwd "Password to unlock your wallet: ")))))
+       :encoding "base16"
+       :passphrase ,(or (car hw-xpub) (read-passwd "Password to unlock your wallet: "))))))
+
+
+(defun cardano-wallet--process-tx (fingerprint json)
+  (let ((filename (cardano-wallet--write-tx (cardano-tx-get-in json 'transaction))))
+
+    (thread-last
+      (cardano-tx-get-in json 'coin_selection 'inputs)
+      (mapcar
+       (lambda (input)
+         (let* ((record-path (cardano-tx-get-in input 'derivation_path))
+                (path-tail (string-join (seq-drop record-path 3) "/")))
+           (vector
+            (format "[%s]%s" fingerprint path-tail)
+            fingerprint
+            path-tail))))
+      (cardano-tx-hw--signing-files)
+      (list nil)
+      (cardano-tx-sign filename)
+      (cardano-tx-submit))))
+
+(defun cardano-wallet--write-tx (cborHex)
+  (let ((type "Unwitnessed Tx BabbageEra")
+        (description "Ledger Cddl Format")
+        (filename (make-temp-file "cardano-tx-")))
+    (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
+    filename))
 
 (defun cardano-wallet-payment (tx-out)
   "Build payment object from TX-OUT."
