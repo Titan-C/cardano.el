@@ -78,12 +78,14 @@ PATH can be a list of symbols or a string separated by `/', `_' or whitespace."
 IDX can be a single integer string or a range a..b.
 In both cases can be suffixed with H for hardened.
 Returns BIP32 integer list."
-  (let ((numbers (pcase idx
-                   ((and n (rx bol (1+ digit) (? "H") eol)) (list (string-to-number n)))
-                   ((and range (rx (group (1+ digit)) ".." (group (1+ digit))))
-                    (number-sequence (string-to-number (match-string 1 range)) (string-to-number (match-string 2 range)))))))
-    (if (string-suffix-p  "H" idx)
-        (mapcar (lambda (x) (+ x (ash 1 31))) numbers) numbers)))
+  (let ((hardened (if (string-match (rx "H" eol) idx) (ash 1 31) 0))
+        (numbers (pcase idx
+                   ((rx bol (1+ digit) (? "H") eol)
+                    (list (string-to-number idx)))
+                   ((and range (rx bol (group (1+ digit)) ".." (group (1+ digit)) (? "H") eol))
+                    (number-sequence (string-to-number (match-string 1 range))
+                                     (string-to-number (match-string 2 range)))))))
+    (mapcar (lambda (x) (+ x hardened)) numbers)))
 
 (defun cardano-tx-bip32--parse-derivation-path (path-spec)
   "Parse PATH-SPEC string definition to list of BIP32 integers."

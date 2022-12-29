@@ -27,6 +27,7 @@
 
 (require 'f)
 (require 'bech32)
+(require 'cl-lib)
 (require 'cbor)
 (require 'hex-util)
 (require 'subr-x)
@@ -93,7 +94,8 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
   (-some->> (cardano-tx-db-typed-files-where 'type spending-type)
     (mapcar (-lambda ((id _type payment-key desc))
               (vector nil
-                      (if (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
+                      (if (or (string= "PaymentVerificationKeyShelley_ed25519" spending-type)
+                              (string= "PaymentExtendedVerificationKeyShelley_ed25519_bip32" spending-type))
                           (cardano-tx-address-payment payment-key stake-key-path)
                         (cardano-tx-address-from-script payment-key stake-key-path))
                       id stake-id monitor
@@ -267,125 +269,110 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
          t t nil
          args))
 
-(defun cardano-tx-address-master-key-from-phrase ()
+(defun cardano-tx-address--master-key-from-phrase ()
   "Recovery word phrase on buffer to master key."
   (cardano-tx-address-piped "key" "from-recovery-phrase" "Shelley"))
 
-(defun cardano-tx-address-derive-child (path)
+(defun cardano-tx-address--derive-child (path)
   "Piped from buffer derive PATH in str specification from extended key."
   (cardano-tx-address-piped "key" "child" path))
 
-(defun cardano-tx-address-public-key (&optional without-chain-code)
+(defun cardano-tx-address-derive-child (root path)
+  "Derive public key from ROOT along PATH."
+  (with-temp-buffer
+    (insert root)
+    (cardano-tx-address--derive-child path)
+    (buffer-string)))
+
+(defun cardano-tx-address--to-public-key (&optional without-chain-code)
   "Piped from buffer extract the public key optionally WITHOUT-CHAIN-CODE."
   (cardano-tx-address-piped "key" "public"
                             (if without-chain-code
                                 "--without-chain-code"
                               "--with-chain-code")))
 
-
-(defun cardano-tx-address--priv-key (xpriv-key pub-key type-name)
-  "JSON string for an extended XPRIV-KEY with PUB-KEY of TYPE-NAME."
-  (cl-assert (and (arrayp xpriv-key) (arrayp pub-key)))
-  (list :type (concat type-name
-                      "ExtendedSigningKeyShelley_ed25519_bip32")
-        :description ""
-        :cborHex (-> (concat (seq-subseq xpriv-key 0 64)
-                             pub-key
-                             (seq-subseq xpriv-key 64))
-                     encode-hex-string
-                     cbor<-elisp
-                     encode-hex-string)))
-
-(defun cardano-tx-address--pub-key (pub-key type-name)
-  "JSON string for a PUB-KEY file of TYPE-NAME."
-  (cl-assert (arrayp pub-key))
-  (list :type (concat type-name
-                      "VerificationKeyShelley_ed25519")
-        :description (concat type-name " Verification Key")
-        :cborHex (-> pub-key encode-hex-string
-                     cbor<-elisp encode-hex-string)))
-
-(defun cardano-tx-address-cli-keys (file-name)
-  "Save `cardano-tx-cli' key-pairs labeled by FILE-NAME.
-From extended key in `current-buffer'."
-  (goto-char (point-min))
-  (let ((type-name (if (looking-at "stake") "Stake" "Payment"))
-        (xpriv-key
-         (->> (buffer-string) bech32-decode cdr (apply #'unibyte-string)))
-        (pub-key
-         (progn (cardano-tx-address-public-key t)
-                (->> (buffer-string) bech32-decode cdr (apply #'unibyte-string))))
-        (out-file-name (expand-file-name file-name cardano-tx-db-keyring-dir)))
-    (let ((s-file (concat out-file-name ".skey"))
-          (v-file (concat out-file-name".vkey")))
-      (if (or (file-exists-p v-file) (file-exists-p v-file))
-          (cardano-tx-log 'warn "Skip creating %S key pair, because it already exists." file-name)
-        ;; Write secret signing key
-        (-> (cardano-tx-address--priv-key xpriv-key pub-key type-name)
-            (cardano-tx-write-json s-file))
-        (set-file-modes s-file #o600)
-        ;; Write verification key
-        (-> (cardano-tx-address--pub-key pub-key type-name)
-            (cardano-tx-write-json v-file))
-        (set-file-modes v-file #o600)
-        (cardano-tx-log 'info "Created new key pair: %S" file-name))
-      (list v-file s-file))))
-
-(defun cardano-tx-address-new-hd-key (path-str)
-  "Create new HD key-pair at PATH-STR from wallet recovery phrase."
+(defun cardano-tx-address-to-public-key (bech32str &optional without-chain-code)
   (with-temp-buffer
-    (insert-file-contents
-     (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
-    (cardano-tx-address-master-key-from-phrase)
-    (cardano-tx-address-derive-child path-str)
-    (cardano-tx-address-cli-keys
-     (replace-regexp-in-string "/" "_" path-str))))
+    (insert bech32str)
+    (when (search-backward "_xsk1" nil t)
+      (cardano-tx-address--to-public-key without-chain-code))
+    (buffer-string)))
+
+(defun cardano-tx-address--new-hd-key (master-key &rest derivations)
+  "Create new HD key-pair at PATH-STR from wallet recovery phrase."
+  (cl-flet ((decode (bech32str)
+                    (thread-last bech32str (bech32-decode) (cdr) (apply #'unibyte-string)))
+            (encode (bytestring)
+                    (thread-first
+                      bytestring
+                      (encode-hex-string)
+                      (cbor<-elisp)
+                      (encode-hex-string)))
+            (key-type (name path-str is-extended)
+                      (format "%s%s%sKeyShelley_ed25519%s"
+                              (if (string-suffix-p "2/0" path-str) "Stake" "Payment")
+                              (if is-extended "Extended" "")
+                              name
+                              (if is-extended "_bip32" "")))
+            (write (type description cborHex filename)
+                   (if (file-exists-p filename)
+                       (cardano-tx-log 'warn "Skip creating %S key, because it already exists." filename)
+                     (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
+                     (set-file-modes filename #o600)
+                     (cardano-tx-log 'info "Created new key: %S" filename))
+                   filename))
+    (cl-assert
+     (cl-every
+      (lambda (path)
+        (= (length (split-string path "/"))
+           (cond
+            ((string-prefix-p "root_" master-key) 5)
+            ((string-prefix-p "acct_" master-key) 2))))
+      derivations)
+     nil "Incorrect path description.")
+    (let ((fingerprint (thread-first
+                         (decode master-key)
+                         (cardano-tx-address-to-public-key)
+                         (cardano-tx-hw-fingerprint))))
+      (thread-last
+        derivations
+        (mapcan
+         (lambda (path-str)
+           (let* ((description (format "[%s]%s" fingerprint path-str))
+                  (child (cardano-tx-address-derive-child master-key path-str))
+                  (xpub (cardano-tx-address-to-public-key child)))
+             (cons
+              (write (key-type "Verification" path-str t)
+                     description
+                     (encode (decode xpub))
+                     (cardano-tx-db--new-filename "Verification" description))
+              (when (not (string= child xpub))
+                (let ((xpriv (decode child)))
+                  (list
+                   (write (key-type "Signing" path-str t)
+                          description
+                          (encode (concat (seq-subseq xpriv 0 64)
+                                          (seq-subseq (decode xpub) 0 32)
+                                          (seq-subseq xpriv 64)))
+                          (cardano-tx-db--new-filename "Signing" description)))))))))
+        (cardano-tx-db-load-files)))))
 
 (defun cardano-tx-address-new-hd-key-files (&rest paths)
   "Generate the key pairs for HD derivation PATHS."
   (interactive
-   (split-string (read-string "Specify the derivation path: " "1852H/1815H/0H/")))
-  (cardano-tx-db-load-files
-   (mapcan (lambda (path)
-             (when-let ((path (cardano-tx-bip32-validate-hd-path path)))
-               (cardano-tx-address-new-hd-key path)))
-           paths)))
+   (cardano-tx-bip32-expand-derivation-paths
+    (read-string "Specify the derivation path (2..4 for ranges): " "1852H/1815H/0H/")))
+  (let ((root-key
+         (with-temp-buffer
+           (insert-file-contents
+            (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
+           (cardano-tx-address--master-key-from-phrase)
+           (buffer-string))))
+    (apply #'cardano-tx-address--new-hd-key
+           root-key
+           (cl-remove-if-not #'cardano-tx-bip32-validate-hd-path paths))))
 
 ;; Derive account addresses
-;;
-(defun cardano-tx-address-derive-public-key (root path)
-  "Derive public key from ROOT along PATH."
-  (with-temp-buffer
-    (insert root)
-    (cardano-tx-address-derive-child path)
-    (when (search-backward "_xsk1" nil t)
-      (cardano-tx-address-public-key t))
-    (cdr (bech32-decode (buffer-string)))))
-
-(defun cardano-tx-address-hw-register-vkeys (master-key derivations)
-  "Generate public key files for each of path DERIVATIONS from bech32 MASTER-KEY."
-  (let ((fingerprint
-         (cardano-tx-hw-fingerprint
-          (concat (cdr (bech32-decode master-key))))))
-    (thread-last
-      derivations
-      (mapcar (lambda (it)
-                (let* ((pubkey (cardano-tx-address-derive-public-key master-key it))
-                       (is-extended (< 32 (length pubkey)))
-                       (type (format "%s%sVerificationKeyShelley_ed25519%s"
-                                     (if (string-suffix-p "2/0" it) "Stake" "Payment")
-                                     (if is-extended "Extended" "")
-                                     (if is-extended "_bip32" "")))
-                       (description (format "[%s]%s" fingerprint it))
-                       (cborHex (thread-first
-                                  (apply #'unibyte-string pubkey)
-                                  (encode-hex-string)
-                                  (cbor<-elisp)
-                                  (encode-hex-string)))
-                       (filename (cardano-tx-db--new-filename type description)))
-                  (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
-                  filename)))
-      (cardano-tx-db-load-files))))
 
 (defun cardano-tx-address-hw-derive-key-files ()
   "Generate public key files for registered Hardware device extended keys."
@@ -395,7 +382,7 @@ From extended key in `current-buffer'."
           (cardano-tx-bip32-expand-derivation-paths
            (read-string (format "Derivation path (2..4 for ranges) %s/"
                                 (car (split-string (car xpub))))))))
-    (cardano-tx-address-hw-register-vkeys (elt xpub 4) derivations)))
+    (apply #'cardano-tx-address--new-hd-key (elt xpub 4) derivations)))
 
 (defun cardano-tx-address-hw-load (account-pattern network-id)
   "Gather all Hierarchical deterministic addresses.

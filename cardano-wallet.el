@@ -124,7 +124,7 @@ If JSON-DATA default to post unless METHOD is defined."
                          it)
                 (car it))))
 
-    (cardano-tx-address-hw-register-vkeys (cadr hw-xpub) (list path))
+    (cardano-tx-address--new-hd-key (cadr hw-xpub) path)
     (cardano-tx-address-hw-load
      (concat "[" (car hw-xpub) "]%")
      (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))
@@ -409,6 +409,7 @@ If JSON-DATA default to post unless METHOD is defined."
    #'cardano-wallet-show
    "POST"
    (seq-let (name _id _fingerprint _note data) (cardano-tx-hw--master-keys)
+     (cardano-tx-address--new-hd-key data "2/0")
      (thread-last
        data
        (bech32-decode)
@@ -441,7 +442,10 @@ If JSON-DATA default to post unless METHOD is defined."
                                (upcase (cardano-tx-get-in wallet "name")) wallet-id))
       (cardano-wallet
        (concat "wallets/" wallet-id)
-       (lambda (_x) (message "Wallet %s deleted." wallet-id))
+       (lambda (_x)
+         (message "Wallet %s deleted." wallet-id)
+         (cardano-wallet-balances--refresh)
+         (tabulated-list-print))
        "DELETE"))))
 
 (defun cardano-wallet-tx-finish ()

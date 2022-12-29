@@ -80,14 +80,16 @@
 
 (ert-deftest address-new-hd-keys ()
   (with-keyring
-   (cardano-tx-address-gen-recovery-phrase 12)
+   ;; (cardano-tx-address-gen-recovery-phrase 12)
+   (f-write "legal winner thank year wave sausage worth useful legal winner thank yellow"
+            'utf-8 (expand-file-name "phrase.prv" cardano-tx-db-keyring-dir))
    (cardano-tx-address-new-hd-key-files "1852H/1815H/0H/0/0")
    (should (equal
             (sort (directory-files cardano-tx-db-keyring-dir)
                   #'string-lessp)
             (list "." ".."
-                  "1852H_1815H_0H_0_0.skey"
-                  "1852H_1815H_0H_0_0.vkey"
+                  "_ecc7f1bd_1852H_1815H_0H_0_0.skey"
+                  "_ecc7f1bd_1852H_1815H_0H_0_0.vkey"
                   "cardano.db"
                   "phrase.prv"
                   )))
@@ -95,7 +97,7 @@
    (execute-kbd-macro (vconcat (kbd "RET") )
                       1
                       (lambda ()
-                        (cardano-tx-address-load "PaymentVerificationKeyShelley_ed25519" t)))
+                        (cardano-tx-address-load "PaymentExtendedVerificationKeyShelley_ed25519_bip32" t)))
    (should (equal 1 (length (cardano-tx-db-address--list))))))
 
 (ert-deftest address-new-script ()

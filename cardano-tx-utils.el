@@ -138,20 +138,6 @@ Output SIZE in bits, default 224. Return as hex-string."
    (rx (+ (not (in alnum "."))))
    "_" str))
 
-(defun cardano-tx-clean-filename (filename &optional dir)
-  "Remove any non alphanumeric or square braces from FILENAME.
-Optionally place filename in DIR."
-  (let ((file-name
-         (expand-file-name
-          (cardano-tx-escape-non-alphanum
-           (file-name-nondirectory filename))
-          (file-name-directory filename))))
-    (if (file-exists-p file-name)
-        (if (yes-or-no-p (format "File %s exists.  Overwrite?" filename))
-            file-name
-          (cardano-tx-clean-filename (read-file-name "Pick a name for the file" dir)))
-      file-name)))
-
 (defun cardano-tx-drop-chaincode (file)
   "Create new key FILE without chain-code in case it has, otherwise pass."
   (let ((data (json-parse-string (f-read file) :object-type 'alist)))

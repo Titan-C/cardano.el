@@ -362,20 +362,16 @@ This reads the file and expects it to be a `cardano-cli' produced typed file."
     (insert "\n* " headline " " type "\n" description "\n")
     (cardano-tx-db-insert-native-script-block type file-path)))
 
-(defun cardano-tx-db--new-filename (type description &rest prefered-options)
-  "Propose a new filename for file of TYPE & DESCRIPTION.
-PREFERED-OPTIONS are names that take precedence."
-  (cardano-tx-clean-filename
-   (or (car (flatten-tree prefered-options))
-       (expand-file-name
-        (cardano-tx-escape-non-alphanum
-         (concat
-          (car (split-string description "\n" t  "[[:space:]]"))
-          (cond
-           ((string-match "Verification" type) ".vkey")
-           ((string-match "Signing" type) ".skey")
-           (""))))
-        cardano-tx-db-keyring-dir))
+(defun cardano-tx-db--new-filename (type description)
+  "Propose a new filename for file of TYPE & DESCRIPTION."
+  (expand-file-name
+   (concat
+    (cardano-tx-escape-non-alphanum
+     (or (car (split-string description "\n" t  "[[:space:]]")) type))
+    (cond
+     ((string-match "Verification" type) ".vkey")
+     ((string-match "Signing" type) ".skey")
+     ("")))
    cardano-tx-db-keyring-dir))
 
 (defun cardano-tx-db-file-write (file-id &optional filename)
@@ -383,20 +379,25 @@ PREFERED-OPTIONS are names that take precedence."
 Which defaults to know location or description on keyring."
   (interactive (list (tabulated-list-get-id) nil))
   (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
-    (seq-let (file-id type path description cborHex) result
-      (let ((filename (cardano-tx-db--new-filename type description filename path)))
-        (emacsql (cardano-tx-db)
-                 [:update typed-files
-                  :set (= path $s1)
-                  :where (= id $s2)]
-                 filename
-                 file-id)
-        (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
-        (when (eq (with-current-buffer (current-buffer)
-                    major-mode)
-                  'cardano-tx-db-files-mode)
-          (cardano-tx-db-files--refresh)
-          (tabulated-list-print t))))))
+    (seq-let (file-id type _path description cborHex) result
+      (let ((filename (or filename (cardano-tx-db--new-filename type description))))
+        (if (and (file-exists-p filename)
+                 (not (yes-or-no-p (format "File %s exists.  Overwrite?" filename))))
+            (cardano-tx-db-file-write file-id
+                                      (read-file-name "Pick a name for the file: "
+                                                      cardano-tx-db-keyring-dir filename))
+          (emacsql (cardano-tx-db)
+                   [:update typed-files
+                    :set (= path $s1)
+                    :where (= id $s2)]
+                   filename
+                   file-id)
+          (cardano-tx-write-json (cardano-tx-alist type description cborHex) filename)
+          (when (eq (with-current-buffer (current-buffer)
+                      major-mode)
+                    'cardano-tx-db-files-mode)
+            (cardano-tx-db-files--refresh)
+            (tabulated-list-print t)))))))
 
 (defun cardano-tx-db-file-delete (file-id &optional force)
   "Delete data for FILE-ID.  Optionally FORCE file too."
