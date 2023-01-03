@@ -156,7 +156,7 @@ If RESET query the node again."
 (defun cardano-tx-hw--signing-files (path-desc)
   "Collect all signing file objects that match given PATH-DESC."
   (unless (null path-desc)
-    (let ((query [:with keys [desc fingerprint path-tail] :as [:values $v1]
+    (let ((query [:with keys [fingerprint path-tail desc] :as [:values $v1]
                   :select [note type path-tail cbor-hex] :from master-keys mk
                   :join keys
                   :on (= mk:fingerprint keys:fingerprint)
@@ -179,8 +179,7 @@ Found secret key files and known hardware paths."
        ((and desc
              (string-match
               (rx "[" (group (+ hex)) "]") desc))
-        (push (vector
-               desc
+        (push (cardano-tx-hw--key-format
                (match-string 1 desc)
                (substring desc 10)) hw))
        ((file-exists-p (replace-regexp-in-string "\\.vkey$" ".skey" path))

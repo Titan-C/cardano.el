@@ -93,5 +93,9 @@ Extended public keys are stored directly on the database as master-keys."
          (pick (completing-read "Derive from key: " select-accounts)))
     (assoc pick select-accounts)))
 
+(defun cardano-tx-hw--key-format (fingerprint path-tail)
+  "Row for a hw description key using FINGERPRINT AND PATH-TAIL."
+  (vector fingerprint path-tail (format "[%s]%s" fingerprint path-tail)))
+
 (provide 'cardano-tx-hw)
 ;;; cardano-tx-hw.el ends here
