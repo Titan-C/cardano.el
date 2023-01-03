@@ -281,13 +281,16 @@ scripts (multisigs/timelocks) and Plutus script files.
 To visualize the files registered in the database call the interactive function
 =cardano-tx-db-typed-files=. This opens a table view of all registered files.
 You may add annotations to each file. Annotations help you identify in the
-future their content more than the filename does. You can also open the files
-directly from this view.
+future their content more than the filename does. The available functions for
+this view are:
 
-| Shortcut | Function                      | Description            |
-|----------+-------------------------------+------------------------|
-| o        | =cardano-tx-db-file-open=     | Open file              |
-| a        | =cardano-tx-db-file-annotate= | Add a note to the file |
+| Shortcut | Function                       | Description                                                        |
+|----------+--------------------------------+--------------------------------------------------------------------|
+| o        | =cardano-tx-db-file-open=      | Open file                                                          |
+| a        | =cardano-tx-db-file-annotate=  | Add a note to the file                                             |
+| w        | =cardano-tx-db-file-write=     | Write the file to disk. This overwrites the file with your changes |
+| c        | =cardano-tx-db-file-name-copy= | Copy the file path into the kill-ring                              |
+| d        | =cardano-tx-db-file-delete=    | Delete file from the database. Optionally from disk too.           |
 
 *** Manage addresses
 =cardano-tx-address-load= calculates addresses from registered files and loads
@@ -300,11 +303,12 @@ This opens a view with all registered addresses. You can toggle which ones to
 actively watch(query UTxO balance), copy the address to the keyboard or edit the
 annotation.
 
-| shortcut | function                             |
-|----------+--------------------------------------|
-| a        | =cardano-tx-db-address-annotate=     |
-| c        | =cardano-tx-db-address-copy=         |
-| w        | =cardano-tx-db-address-toggle-watch= |
+| Shortcut | Function                             | Description                               |
+|----------+--------------------------------------+-------------------------------------------|
+| a        | =cardano-tx-db-address-annotate=     | Add note to address                       |
+| c        | =cardano-tx-db-address-copy=         | Copy address to kill-ring                 |
+| w        | =cardano-tx-db-address-toggle-watch= | Query this address when looking for UTxOs |
+| d        | =cardano-tx-db-address-delete=       | Delete address from database              |
 
 ** Crafting a transaction
 The goal is to directly create the transaction in your editor instead of using
@@ -679,14 +683,30 @@ for transactions pertaining your wallet, that takes a fair amount of time the
 first time, then it stays in watch mode and keeps synchronizing with the latest
 state of the blockchain.
 
+From the balances view you can interact with each wallet using this shortcut functions:
+
+| Shortcut | Function                   | Description                                |
+| RET      | =cardano-wallet-describe=  | Show the information about the wallet      |
+| s        | =cardano-wallet-tx-new=    | Create a new payment transaction           |
+| l        | =cardano-wallet-addresses= | List all addresses associated to wallet    |
+| t        | =cardano-wallet-tx-log=    | List all the transactions from this wallet |
+| d        | =cardano-wallet-delete=    | Remove this wallet                         |
+
 =cardano-wallet-helm-pick= is the entry point to work with each of your wallets
-individually. Its menu lets start a payment transaction, list all addresses,
-look at the transaction history, and show a description of the wallet.
+individually. Gives you the same functionality you have from the balances view.
+Its menu lets start a payment transaction, list all addresses, look at the
+transaction history, and show a description of the wallet.
 
 You can register your hardware wallet public keys using the command
 =cardano-wallet-hw-register=. In this case you can create directly payment
 transaction from this interface. When opening this wallet from the address view
 it is also possible to instantiate their verification keys.
+
+When creating transactions the editor is much more restricted, as only payments
+are possible, you can only specify outputs. The wallet takes care off the inputs
+through coin selection. If you have registered your hardware wallet it also
+takes care of calling the hardware device to witness the transaction and submit
+it.
 
 * Ouroboros mini-protocols
 The file =ouroboros.el= contains a simple implementation of [[https://hydra.iohk.io/job/Cardano/ouroboros-network/native.network-docs.x86_64-linux/latest/download/2][The Shelley
