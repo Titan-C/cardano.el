@@ -224,22 +224,27 @@ CIP-11 the path =1852H/1815H/0H/2/0= will generate the staking key.
 As in the previous section you can create the corresponding addresses calling
 interactively =cardano-tx-address-load=.
 *** Hardware Wallets (Experimental)
-Installing the patched version from [[https://github.com/arsmagna-xyz/cardano-hw-cli/tree/witness-request][cardano-hw-cli]] in from arsmagna-xyz on the
-=witness-request= branch you can request the hardware wallet public keys by
-calling =M-x cardano-tx-hw-request-extended-pubkeys=. The intention is to only
-request the public keys following BIP32 until the account index, that is the
-path depth of 3. E.g.
+Installing the patched version from [[https://github.com/arsmagna-xyz/cardano-hw-cli/tree/witness-request][cardano-hw-cli]] from arsmagna-xyz on the
+=witness-request= branch. Register the location of the binary, for example.
+#+begin_src emacs-lisp
+(setq cardano-tx-hw-command (executable-find "cardano-hw-cli"))
+#+end_src
+
+You can request the hardware wallet public keys by calling =M-x
+cardano-tx-hw-request-extended-pubkeys=. The intention is to only request the
+public keys following BIP32 until the account index, that is the path depth
+of 3. E.g.
 #+begin_quote
 1852H/1815H/0H
 #+end_quote
 
 The editor stores this extended public key on the database and manages the key
 derivations, on demand in the database. You can access the stored keys by
-calling =cardano-tx-db-master-keys=, which open a table view of the registered
-extended public keys. Likewise to the HD wallets, to derive and register the
-payment and staking verification keys you must first call
-=cardano-tx-address-hw-derive-key-files=. There select which extended account
-key do you want to derive from and define a the paths along which to derive this
+calling =M-x cardano-tx-db-master-keys=, which open a table view of the
+registered extended public keys. Likewise to the HD wallets, to derive and
+register the payment and staking verification keys you must first call =M-x
+cardano-tx-address-hw-derive-key-files=. There select which extended account key
+do you want to derive from and define the paths along which to derive these
 keys. In this case you can use the expansion syntax for paths with =..= marking
 an inclusive range. For example
 #+begin_quote
@@ -261,9 +266,9 @@ Don't forget to derive the staking path which terminates in =2/0=.
 Once you have your verification keys registered it is time to create the
 corresponding addresses. In this case there is a special function that is
 account preserving for each of the extended public keys from the hardware
-device. Call =cardano-tx-address-hw-load= and select the extended public key
-account for which to generate the address. It will generate addresses for all
-registered keys in the database that belong to that account.
+device. Call =M-x cardano-tx-address-hw-load= and select an extended public key
+account. It will generate addresses for all registered keys in the database that
+belong to that account.
 
 *** Registering key files
 If you generated some key files previous to using cardano.el or from previous
@@ -677,6 +682,11 @@ state of the blockchain.
 =cardano-wallet-helm-pick= is the entry point to work with each of your wallets
 individually. Its menu lets start a payment transaction, list all addresses,
 look at the transaction history, and show a description of the wallet.
+
+You can register your hardware wallet public keys using the command
+=cardano-wallet-hw-register=. In this case you can create directly payment
+transaction from this interface. When opening this wallet from the address view
+it is also possible to instantiate their verification keys.
 
 * Ouroboros mini-protocols
 The file =ouroboros.el= contains a simple implementation of [[https://hydra.iohk.io/job/Cardano/ouroboros-network/native.network-docs.x86_64-linux/latest/download/2][The Shelley

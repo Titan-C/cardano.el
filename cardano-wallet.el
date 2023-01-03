@@ -453,24 +453,6 @@ If JSON-DATA default to post unless METHOD is defined."
          :mnemonic_sentence mnemonic
          :passphrase passphrase)))
 
-(defun cardano-wallet-register ()
-  "Register a new wallet from the known extended public key accounts."
-  (interactive)
-  (cardano-wallet
-   "wallets"
-   #'cardano-wallet-show
-   "POST"
-   (seq-let (name _id _fingerprint _note data) (cardano-tx-hw--master-keys)
-     (cardano-tx-address--new-hd-key data "2/0")
-     (thread-last
-       data
-       (bech32-decode)
-       (cdr)
-       (apply #'unibyte-string)
-       (encode-hex-string)
-       (list :name (car (split-string name))
-             :account_public_key)))))
-
 (defun cardano-wallet-monitor (name xpub)
   "Register a new wallet under NAME for given XPUB in hex."
   (interactive
@@ -485,6 +467,19 @@ If JSON-DATA default to post unless METHOD is defined."
    "POST"
    (list :name name
          :account_public_key xpub)))
+
+(defun cardano-wallet-hw-register ()
+  "Register a new wallet from the known extended public key accounts."
+  (interactive)
+  (seq-let (name _id _fingerprint _note data) (cardano-tx-hw--master-keys)
+    (cardano-tx-address--new-hd-key data "2/0")
+    (thread-last
+      data
+      (bech32-decode)
+      (cdr)
+      (apply #'unibyte-string)
+      (encode-hex-string)
+      (cardano-wallet-monitor (car (split-string name))))))
 
 (defun cardano-wallet-delete (wallet)
   "Delete WALLET."
