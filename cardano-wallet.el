@@ -382,28 +382,27 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet-tx-log--refresh ()
   "Refresh the transaction log entry list."
-  (let ((annotations
-         (emacsql (cardano-tx-db) [:select * :from tx-annotation :where (in txid $v1)]
-                  (vconcat (--map (cardano-tx-get-in it "id")
-                                  cardano-wallet--buffer-response)))))
-    (->> cardano-wallet--buffer-response
-         (seq-map
-          (lambda (res)
-            (let ((date (cardano-tx-get-in res "inserted_at" "time"))
-                  (id (cardano-tx-get-in res "id"))
-                  (net-amount (cardano-tx-get-in res "amount" "quantity")))
-              (list id
-                    (cl-map 'vector
-                            #'cardano-wallet-print-col
-                            (list date id
-                                  (cardano-tx-get-in res "fee" "quantity")
-                                  (if (string= "incoming" (cardano-tx-get-in res "direction"))
-                                      net-amount
-                                    (propertize (cardano-wallet-print-col net-amount)
-                                                'face 'font-lock-keyword-face))
-                                  (-> (alist-get id annotations '("") nil #'string=)
-                                      car (split-string "\n") car)))))))
-         (setq tabulated-list-entries))))
+  (->> cardano-wallet--buffer-response
+       (seq-map
+        (lambda (res)
+          (vector
+           (cardano-tx-get-in res "id")
+           (cardano-tx-get-in res "inserted_at" "time")
+           (cardano-wallet-readable-number (cardano-tx-get-in res "fee" "quantity"))
+           (apply #'propertize
+                  (cardano-wallet-readable-number (cardano-tx-get-in res "amount" "quantity"))
+                  (unless (string= "incoming" (cardano-tx-get-in res "direction"))
+                    (list 'face 'font-lock-keyword-face))))))
+       (emacsql (cardano-tx-db)
+                [:with log [id date fee amount] :as [:values $v1]
+                 :select [id date fee amount (funcall ifnull annotation "")] :from tx-annotation
+                 :right-join log :on (= id txid)
+                 :order-by [(desc date)]])
+       (seq-map
+        (-lambda ((id date fee amount annotation))
+          (list id
+                (vector date id fee amount (car (split-string annotation "\n"))))))
+       (setq tabulated-list-entries)))
 
 (defun cardano-wallet-tx-log--refresh-query (&optional _arg _noconfirm)
   "Query for registered transactions and `revert-buffer'."
