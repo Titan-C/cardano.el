@@ -224,6 +224,20 @@ MONITOR the address if not nil."
   (message "Address %s copied to `kill-ring'."
            (-> (tabulated-list-get-entry) (aref 1) (kill-new))))
 
+(defun cardano-tx-db-address-delete (address)
+  "Delete data for ADDRESS."
+  (interactive
+   (list (-> (tabulated-list-get-entry) (aref 1) (kill-new))))
+  (emacsql (cardano-tx-db)
+           [:delete :from addresses
+            :where (= raw $s1)]
+           address)
+  (when (eq (with-current-buffer (current-buffer)
+              major-mode)
+            'cardano-tx-db-addresses-mode)
+    (forward-line)
+    (revert-buffer)))
+
 (defun cardano-tx-db-address-annotate (address)
   "Annotate data for ADDRESS."
   (interactive
@@ -263,6 +277,7 @@ MONITOR the address if not nil."
   (let ((map (make-sparse-keymap)))
     (define-key map "w" #'cardano-tx-db-address-toggle-watch)
     (define-key map "c" #'cardano-tx-db-address-copy)
+    (define-key map "d" #'cardano-tx-db-address-delete)
     (define-key map "a" #'cardano-tx-db-address-annotate)
     map))
 
