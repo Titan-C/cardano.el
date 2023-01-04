@@ -10,3 +10,7 @@
 # Undo-tree save-files
 *.~undo-tree
 /keys/
+/testbox/
+/plutus-data/
+/contracts/
+/policy/
