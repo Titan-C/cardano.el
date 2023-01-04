@@ -39,6 +39,22 @@
   (should (equal (cardano-tx-assets-parse-token-bundle '(("6672757374726174696f6e" . 2)))
                  '(("frustration" . 2)))))
 
+(ert-deftest test-group-token-bundle ()
+  (let ((data
+         '("483c:\ngold: 100"
+           "483c:\nplat: 50"
+           "a575:\nshad: 3"
+           "a575:\nskyi: 12"
+           "a575:\nsunn: 10"
+           "abcd:\ntest: 1"
+           "abcd:\nfrus: 1"
+           "abcd:\nnetw: 1"
+           "abcd:\nchus: 2")))
+    (should (equal (cardano-tx-assets-group-tokens data)
+                   '(("abcd" ("63687573" . 2) ("6e657477" . 1) ("66727573" . 1) ("74657374" . 1))
+                     ("a575" ("73756e6e" . 10) ("736b7969" . 12) ("73686164" . 3))
+                     ("483c" ("706c6174" . 50) ("676f6c64" . 100)))))))
+
 (defmacro with-keyring (&rest body)
   "Fixture to execute BODY with address keyring temporary dir."
   `(let ((cardano-tx-db-keyring-dir (make-temp-file "test-addr" t)))

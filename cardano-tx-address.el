@@ -114,7 +114,7 @@ To include staking set STAKE-NOTE STAKE-ID and STAKE-KEY-PATH."
            (list "--stake-verification-key-file" stake-key))))
 
 (defun cardano-tx-address--hash (cbor-hex)
-  "Calculate the hash of a CBOR-HEX verification key encoded bytestring."
+  "Calculate the hash of a CBOR-HEX verification key encoded byte-string."
   (thread-first
     cbor-hex
     (cbor->elisp)
@@ -292,6 +292,7 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
                               "--with-chain-code")))
 
 (defun cardano-tx-address-to-public-key (bech32str &optional without-chain-code)
+  "Calculate public keys from BECH32STR optionally WITHOUT-CHAIN-CODE."
   (with-temp-buffer
     (insert bech32str)
     (when (search-backward "_xsk1" nil t)
@@ -299,7 +300,7 @@ Save it unencrypted on `cardano-tx-db-keyring-dir'."
     (buffer-string)))
 
 (defun cardano-tx-address--new-hd-key (master-key &rest derivations)
-  "Create new HD key-pair at PATH-STR from wallet recovery phrase."
+  "Create new HD key-pair from MASTER-KEY along BIP32 path string DERIVATIONS."
   (cl-flet ((decode (bech32str)
                     (thread-last bech32str (bech32-decode) (cdr) (apply #'unibyte-string)))
             (encode (bytestring)

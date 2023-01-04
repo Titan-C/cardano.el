@@ -58,6 +58,18 @@ Token names are now hex encoded-make them readable."
                    (concat (car value) ":\n" ))))
    (t (mapconcat #'cardano-tx-assets-format-tokens value "\n"))))
 
+(defun cardano-tx-assets-group-tokens (flat-token-list)
+  "From FLAT-TOKEN-LIST each a string to asset bundle."
+  (let ((ht (make-hash-table :test #'equal))
+        ret)
+    (dolist (entry flat-token-list)
+      (-let (((policy asset amount) (split-string entry nil t (rx (or ":" whitespace)))))
+        (push (cons  (encode-hex-string asset) (string-to-number amount)) (gethash policy ht ()))))
+    (maphash (lambda (policy tokens)
+               (push (cons policy tokens) ret))
+             ht)
+    ret))
+
 (defun cardano-tx-assets-hexify (value)
   "Convert asset names in output VALUE to hex strings."
   (mapcar (-lambda ((asset . quantity))

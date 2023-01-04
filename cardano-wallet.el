@@ -38,6 +38,7 @@
 (require 'yaml-mode)
 (require 'readable-numbers)
 (require 'cardano-tx-utils)
+(require 'cardano-tx-assets)
 (require 'cardano-tx-address)
 (require 'cardano-tx-db)
 (require 'cardano-tx-hw)
@@ -583,17 +584,17 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-tx-assets-pick ()
   "Load assets available on wallet to `kill-ring'."
   (interactive)
-  (--> (cardano-wallet-assets cardano-wallet-tx--wallet)
+  (->> (cardano-wallet-assets cardano-wallet-tx--wallet)
        (--map
         (let ((assetname (decode-hex-string (cardano-tx-get-in it "asset_name"))))
           (concat (cardano-tx-get-in it "policy_id") ":\n"
                   (if (cardano-tx-nw-p assetname) assetname "\"\"") ": "
-                  (number-to-string (cardano-tx-get-in it "quantity"))))
-        it)
-       (cardano-tx-pick "Assets" it)
-       (string-join it "\n")
-       (replace-regexp-in-string "^" "      " it)
-       (kill-new it)))
+                  (number-to-string (cardano-tx-get-in it "quantity")))))
+       (cardano-tx-pick "Assets")
+       (cardano-tx-assets-group-tokens)
+       (cardano-tx-assets-format-tokens)
+       (replace-regexp-in-string "^" "      ")
+       (kill-new)))
 
 (provide 'cardano-wallet)
 ;;; cardano-wallet.el ends here
