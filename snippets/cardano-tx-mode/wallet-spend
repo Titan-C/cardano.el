@@ -4,9 +4,9 @@
 # expand-env: ((yas-indent-line 'fixed))
 # --
 
-# Wallet: `(cardano-wallet-name cardano-wallet-tx--wallet)`
-# ID: `(cardano-wallet-id cardano-wallet-tx--wallet)`
-# Lovelace balance: `(cardano-wallet-total cardano-wallet-tx--wallet)`
+# Wallet: `(cardano-wallet-name cardano-wallet-current)`
+# ID: `(cardano-wallet-id cardano-wallet-current)`
+# Lovelace balance: `(cardano-wallet-total cardano-wallet-current)`
 
 outputs:
   - address:  $1

@@ -93,9 +93,44 @@ Extended public keys are stored directly on the database as master-keys."
          (pick (completing-read "Derive from key: " select-accounts)))
     (assoc pick select-accounts)))
 
-(defun cardano-tx-hw--key-format (fingerprint path-tail)
-  "Row for a hw description key using FINGERPRINT AND PATH-TAIL."
+(defun cardano-tx-hw--key-spec (fingerprint path-tail)
+  "Row for a hw description key using FINGERPRINT and PATH-TAIL."
   (vector fingerprint path-tail (format "[%s]%s" fingerprint path-tail)))
+
+(defun cardano-tx-hw--signing-files (path-desc)
+  "Collect all signing file objects that match given PATH-DESC."
+  (unless (null path-desc)
+    (let ((query [:with keys [fingerprint path-tail desc] :as [:values $v1]
+                  :select [note type path-tail cbor-hex] :from master-keys mk
+                  :join keys
+                  :on (= mk:fingerprint keys:fingerprint)
+                  :join typed-files
+                  :on (= description desc)]))
+      (cl-loop for (note type path-tail cbor-hex) in
+               (emacsql (cardano-tx-db) query path-desc)
+               when (string-prefix-p "HW" note)
+               collect `((type . ,type)
+                         (description . "HardwareWallet Signing File")
+                         (path . ,(concat (car (split-string (substring note 2) nil t)) "/" path-tail))
+                         (cborXPubKeyHex . ,cbor-hex))))))
+
+(defun cardano-tx-hw--witness (tx-file &rest key-specs)
+  "Return each of witness files for TX-FILE given hardware device KEY-SPECS.
+TX-FILE will be transformed for device, thus call this function
+before cardano-cli witness."
+  (when-let ((witnesses
+              (cl-loop repeat (length key-specs)
+                       collect (make-temp-file (file-name-base tx-file) nil ".witness"))))
+    (cardano-tx-hw "transaction" "transform" "--tx-file" tx-file "--out-file" tx-file)
+    (apply #'cardano-tx-hw
+           (append
+            (list "transaction" "witness" "--tx-file" tx-file
+                  "--sign-request" (thread-first (cardano-tx-hw--signing-files key-specs)
+                                                 (vconcat)
+                                                 (json-serialize)))
+            cardano-tx-cli-network-args
+            (cl-loop for witness in witnesses nconc (list "--out-file" witness))))
+    witnesses))
 
 (provide 'cardano-tx-hw)
 ;;; cardano-tx-hw.el ends here

@@ -153,23 +153,6 @@ If RESET query the node again."
            (--map (cardano-tx-get-in it 'utxo)
                   (cardano-tx-get-in input-data 'inputs))))
 
-(defun cardano-tx-hw--signing-files (path-desc)
-  "Collect all signing file objects that match given PATH-DESC."
-  (unless (null path-desc)
-    (let ((query [:with keys [fingerprint path-tail desc] :as [:values $v1]
-                  :select [note type path-tail cbor-hex] :from master-keys mk
-                  :join keys
-                  :on (= mk:fingerprint keys:fingerprint)
-                  :join typed-files
-                  :on (= description desc)]))
-      (cl-loop for (note type path-tail cbor-hex) in
-               (emacsql (cardano-tx-db) query path-desc)
-               when (string-prefix-p "HW" note)
-               collect `((type . ,type)
-                         (description . "HardwareWallet Signing File")
-                         (path . ,(concat (car (split-string (substring note 2) nil t)) "/" path-tail))
-                         (cborXPubKeyHex . ,cbor-hex))))))
-
 (defun cardano-tx--witness-sources (require-witness)
   "From REQUIRE-WITNESS return a 2-tuple.
 Found secret key files and known hardware paths."
@@ -179,7 +162,7 @@ Found secret key files and known hardware paths."
        ((and desc
              (string-match
               (rx "[" (group (+ hex)) "]") desc))
-        (push (cardano-tx-hw--key-format
+        (push (cardano-tx-hw--key-spec
                (match-string 1 desc)
                (substring desc 10)) hw))
        ((file-exists-p (replace-regexp-in-string "\\.vkey$" ".skey" path))
@@ -187,7 +170,7 @@ Found secret key files and known hardware paths."
               (cl-adjoin (replace-regexp-in-string "\\.vkey$" ".skey" path)
                          files :test #'string=)))
        ((cardano-tx-log 'warn "Unknown signature file %s in %s" desc path))))
-    (list files (cardano-tx-hw--signing-files hw))))
+    (list files hw)))
 
 (defun cardano-tx-witnesses (input-data)
   "Given the INPUT-DATA about to be spent.  Which wallets control them?
@@ -198,8 +181,8 @@ All the wallet address-file pairs in the keyring are tested."
                  [:select :distinct [path description cbor-hex] :from utxos
                   :join addresses :on (= addr-id addresses:id)
                   :join typed-files :on (= spend-key typed-files:id)
-                  :where ;;(and (like type "Payment%VerificationKeyShelley_ed25519%"))
-                  (in utxo $v1)]
+                  :where (and (like type "%VerificationKeyShelley_ed25519%")
+                              (in utxo $v1))]
                  (cardano-tx-witness-query
                   (cardano-tx-get-in input-data 'witness))))
        (cardano-tx--witness-sources)))
@@ -215,37 +198,30 @@ All the wallet address-file pairs in the keyring are tested."
          (apply #'cardano-tx-cli))
     signed-file))
 
+(defun cardano-tx--witness (tx-file &rest signing-key-files)
+  "Return each of witness files for TX-FILE given SIGNING-KEY-FILES."
+  (cl-loop for secret in signing-key-files
+           for witness = (make-temp-file (file-name-base tx-file) nil ".witness")
+           do (cardano-tx-cli "transaction" "witness" "--tx-body-file" tx-file
+                              "--signing-key-file" secret
+                              "--out-file" witness)
+           collect witness))
+
 (defun cardano-tx--witness-and-assemple (tx-file witness-keys)
   "For each of WITNESS-KEYS witness TX-FILE.
 Assemble all witnesses into transaction & submit it."
   (seq-let (secret-files hardware-paths) witness-keys
-    (when hardware-paths
-      (cardano-tx-hw "transaction" "transform" "--tx-file" tx-file "--out-file" tx-file))
-    (let ((secret-file-witness
-           (cl-loop for secret in secret-files
-                    for witness = (make-temp-file (file-name-base tx-file) nil ".witness")
-                    do (cardano-tx-cli "transaction" "witness" "--tx-body-file" tx-file
-                                       "--signing-key-file" secret
-                                       "--out-file" witness)
-                    collect witness))
-          (hardware-device-witness (cl-loop repeat (length hardware-paths) collect (make-temp-file (file-name-base tx-file) nil ".witness"))))
-      (apply #'cardano-tx-hw
-             (append
-              (list "transaction" "witness" "--tx-file" tx-file
-                    "--sign-request" (thread-first hardware-paths
-                                                   (vconcat)
-                                                   (json-serialize)))
-              cardano-tx-cli-network-args
-              (cl-loop for witness in hardware-device-witness nconc (list "--out-file" witness))))
-      (let ((signed-file (concat tx-file ".signed")))
-        (->> (list "transaction" "assemble"
-                   "--tx-body-file" tx-file
-                   (--map (list "--witness-file" it)
-                          (append secret-file-witness hardware-device-witness))
-                   "--out-file" signed-file)
-             (flatten-tree)
-             (apply #'cardano-tx-cli))
-        signed-file))))
+    (let ((secret-file-witness (apply #'cardano-tx--witness tx-file secret-files))
+          (hardware-device-witness (apply #'cardano-tx-hw--witness tx-file hardware-paths))
+          (signed-file (concat tx-file ".signed")))
+      (->> (list "transaction" "assemble"
+                 "--tx-body-file" tx-file
+                 (--map (list "--witness-file" it)
+                        (append secret-file-witness hardware-device-witness))
+                 "--out-file" signed-file)
+           (flatten-tree)
+           (apply #'cardano-tx-cli))
+      signed-file)))
 
 (defun cardano-tx-sign (tx-file witness-keys)
   "Sign a transaction file TX-FILE with WITNESS-KEYS."
@@ -481,13 +457,6 @@ It produces the actual policy-id from the MINT-ROWS."
                     "--tx-body-file")
                   tx-file))
 
-(defun cardano-tx-submit (tx-file)
-  "Submit transaction on TX-FILE."
-  (when (and (stringp tx-file) (file-exists-p tx-file))
-    (message "%s\nTxId: %s. Copied to kill-ring"
-             (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
-             (kill-new (cardano-tx-view-or-hash tx-file t)))))
-
 (defun cardano-tx--parse-yaml (str)
   "From yaml STR to alist."
   (yaml-parse-string str :object-type 'alist :object-key-type 'string))
@@ -522,6 +491,52 @@ It produces the actual policy-id from the MINT-ROWS."
       (replace-regexp-in-string "^" "      ")
       kill-new)))
 
+(defun cardano-tx-submit (tx-file)
+  "Submit transaction on TX-FILE."
+  (when (and (stringp tx-file) (file-exists-p tx-file))
+    (message "%s\nTxId: %s. Copied to kill-ring"
+             (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
+             (kill-new (cardano-tx-view-or-hash tx-file t)))))
+
+(define-derived-mode cardano-tx-mode yaml-mode "cardano-tx"
+  "Edit a transaction through a yaml representation."
+  (readable-numbers-mode)
+  (yas-minor-mode-on)
+  (yas-load-directory cardano-tx-snippet-dir)
+  (add-function :before-until (local 'eldoc-documentation-function)
+                #'cardano-tx-eldoc-documentation-function))
+
+(defun cardano-tx-preview (tx-file)
+  "Open buffer that previews transaction TX-FILE as displayed by `cardano-cli'."
+  (interactive (list (read-file-name "Select transaction file: ")))
+  (with-current-buffer (get-buffer-create "*Cardano Preview tx*")
+    (erase-buffer)
+    (cardano-tx-mode)
+    (insert "# This is the transaction preview\n")
+    (insert "# txid: " (cardano-tx-view-or-hash tx-file t) "\n\n")
+    (insert (cardano-tx-view-or-hash tx-file))
+    (switch-to-buffer (current-buffer))))
+
+(defun cardano-tx-review-before-submit (tx-file originating-buffer)
+  "Review transaction as displayed by `cardano-cli' for TX-FILE.
+
+Set ORIGINATING-BUFFER as local variable."
+  (with-current-buffer (cardano-tx-preview tx-file)
+    (setq-local cardano-tx--buffer originating-buffer)
+    (local-set-key (kbd "C-c C-s") #'cardano-tx-send-from-preview)
+    (message "Press %s to send the transaction."
+             (substitute-command-keys "\\[cardano-tx-send-from-preview]"))))
+
+(defun cardano-tx-send-from-preview ()
+  "Send the transaction in buffer and kill corresponding transaction buffer."
+  (interactive)
+  (if cardano-tx--buffer
+      (progn
+        (with-current-buffer cardano-tx--buffer
+          (cardano-tx-edit-finish nil))
+        (kill-buffer))
+    (message "This is not a transaction preview buffer.")))
+
 (defun cardano-tx-edit-finish (preview)
   "Process buffer into a transaction, sign it and open PREVIEW."
   (interactive "P")
@@ -537,36 +552,38 @@ It produces the actual policy-id from the MINT-ROWS."
           (cardano-tx-db-utxo-reset (cardano-tx-db))))
     (error "Something is wrong.  Cannot parse the file")))
 
-(defun cardano-tx-preview (tx-file)
-  "Open buffer that previews transaction TX-FILE as displayed by `cardano-cli'."
-  (interactive (list (read-file-name "Select transaction file: ")))
-  (let ((buffer (get-buffer-create "*Cardano Preview tx*")))
-    (with-current-buffer buffer
-      (erase-buffer)
-      (insert "# This is the transaction preview\n")
-      (insert "# txid: " (cardano-tx-view-or-hash tx-file t) "\n\n")
-      (insert (cardano-tx-view-or-hash tx-file))
-      (cardano-tx-mode))
-    (switch-to-buffer buffer)))
-
-(defun cardano-tx-review-before-submit (tx-file originating-buffer)
-  "Review transaction as displayed by `cardano-cli' for TX-FILE.
-
-Set ORIGINATING-BUFFER as local variable."
-  (with-current-buffer (cardano-tx-preview tx-file)
-    (setq-local cardano-tx--buffer originating-buffer))
-  (message "Press %s to send the transaction."
-           (substitute-command-keys "\\[cardano-tx-send-from-preview]")))
-
-(defun cardano-tx-send-from-preview ()
-  "Send the transaction in buffer and kill corresponding transaction buffer."
+(defun cardano-tx-new ()
+  "Open an editor to create a new transaction."
   (interactive)
-  (if cardano-tx--buffer
-      (progn
-        (with-current-buffer cardano-tx--buffer
-          (cardano-tx-edit-finish nil))
-        (kill-buffer))
-    (message "This is not a transaction preview buffer.")))
+  (with-current-buffer (generate-new-buffer "*Cardano tx*")
+    (switch-to-buffer (current-buffer))
+    (insert "# -*- mode: cardano-tx; -*-\n\n")
+    (cardano-tx-mode)
+    (local-set-key (kbd "C-c C-c") #'cardano-tx-edit-finish)
+    (yas-expand-snippet (yas-lookup-snippet 'spend))
+    (message "Press %s to build and send transaction.\n With prefix to build and preview."
+             (substitute-command-keys "\\[cardano-tx-edit-finish]"))))
+
+(defun cardano-tx-eldoc-documentation-function ()
+  "Return the eldoc description of address at point."
+  (pcase (thing-at-point 'symbol)
+    ((pred null) nil)
+    ((and (rx bol (or "addr" "stake") (opt "_test") "1") sym)
+     (cardano-tx-address-decode sym))
+    ((and (rx bol (= 64 hex)  "#" (+ digit) eol) sym)
+     (-> (substring-no-properties sym) (vector)
+         (cardano-tx-db-utxo-info) (car) (cardano-tx--utxo-contents)))))
+
+(defun cardano-tx-finish-native-script ()
+  "Parse native-script in buffer, save to file and load it to db."
+  (interactive)
+  (when-let ((file-name
+              (cardano-tx-save-native-script (cardano-tx--input-buffer)))
+             (new-name (expand-file-name (file-name-nondirectory file-name)
+                                         cardano-tx-db-keyring-dir)))
+    (rename-file file-name new-name 'overwrite)
+    (cardano-tx-db-load-files (list new-name))
+    (kill-buffer)))
 
 (defun cardano-tx-new-script ()
   "Create a new native script."
@@ -578,52 +595,7 @@ Set ORIGINATING-BUFFER as local variable."
     (switch-to-buffer (current-buffer))
     (readable-numbers-mode)
     (yas-expand-snippet (yas-lookup-snippet "native script"))
-    (local-set-key "\C-c\C-c"
-                   (lambda ()
-                     (interactive)
-                     (let* ((file-name
-                             (cardano-tx-save-native-script (cardano-tx--input-buffer)))
-                            (new-name (expand-file-name (file-name-nondirectory file-name)
-                                                        cardano-tx-db-keyring-dir)))
-                       (rename-file file-name new-name 'overwrite)
-                       (cardano-tx-db-load-files (list new-name)))
-                     (kill-buffer)))))
-
-(defun cardano-tx-new ()
-  "Open an editor to create a new transaction."
-  (interactive)
-  (let ((buffer (generate-new-buffer "*Cardano tx*")))
-    (switch-to-buffer buffer)
-    (insert "# -*- mode: cardano-tx; -*-\n\n")
-    (cardano-tx-mode)
-    (yas-expand-snippet (yas-lookup-snippet 'spend)))
-  (message "Press %s to build and send transaction.\n With prefix to build and preview."
-           (substitute-command-keys "\\[cardano-tx-edit-finish]")))
-
-(defvar cardano-tx-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c C-c") #'cardano-tx-edit-finish)
-    (define-key map (kbd "C-c C-s") #'cardano-tx-send-from-preview)
-    map)
-  "Key map for `cardano-tx-mode'.")
-
-(define-derived-mode cardano-tx-mode yaml-mode "cardano-tx"
-  "Edit a transaction through a yaml representation."
-  (readable-numbers-mode)
-  (yas-minor-mode-on)
-  (yas-load-directory cardano-tx-snippet-dir)
-  (add-function :before-until (local 'eldoc-documentation-function)
-                #'cardano-tx-eldoc-documentation-function))
-
-(defun cardano-tx-eldoc-documentation-function ()
-  "Return the eldoc description of address at point."
-  (pcase (thing-at-point 'symbol)
-    ((pred null) nil)
-    ((and (rx bol (or "addr" "stake") (opt "_test") "1") sym)
-     (cardano-tx-address-decode sym))
-    ((and (rx bol (= 64 hex)  "#" (+ digit) eol) sym)
-     (-> (substring-no-properties sym) (vector)
-         (cardano-tx-db-utxo-info) (car) (cardano-tx--utxo-contents)))))
+    (local-set-key (kbd "C-c C-c") #'cardano-tx-finish-native-script)))
 
 (provide 'cardano-tx)
 ;;; cardano-tx.el ends here

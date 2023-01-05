@@ -55,10 +55,6 @@
   "Cardano wallet URL with port."
   :type 'string)
 
-(defvar-local cardano-wallet-tx--wallet nil
-  "Hash-table containing active wallet information.
-This is only available on TX preview buffers.")
-
 (defvar-local cardano-wallet-current nil
   "Actively selected wallet.")
 
@@ -84,12 +80,53 @@ If JSON-DATA default to post unless METHOD is defined."
   "Show whatever is the response JSON."
   (with-current-buffer (get-buffer-create "*Cardano wallet response*")
     (erase-buffer)
-    (insert (yaml-encode json))
     (yaml-mode)
+    (insert (yaml-encode json))
     (readable-numbers-mode)
     (display-buffer (current-buffer))))
 
+(defun cardano-wallet-readable-number (amount)
+  "AMOUNT as an underscore separated readable string."
+  (let ((ref (number-to-string amount)))
+    (if (<= (length ref) 4)
+        ref
+      (let ((start (if (= 0 (string-match (rx (+ (= 3 digit)) eol) ref))
+                       3 (match-beginning 0))))
+        (string-join
+         (cons
+          (substring ref 0 start)
+          (--map (substring ref it (+ it +3))
+                 (number-sequence start (1- (match-end 0)) 3)))
+         "_")))))
+
+(defun cardano-wallet-print-col (value)
+  "Format VALUE for column."
+  (pcase value
+    ((pred integerp) (cardano-wallet-readable-number value))
+    ((pred stringp) value)
+    (n (format "%S" n))))
+
 ;;; Wallet addresses management
+(defun cardano-wallet--derive-files-for-keys (key-list)
+  "Derive for KEY-LIST."
+  (thread-last
+    key-list
+    (emacsql (cardano-tx-db)
+             [:with used-keys [fingerprint path-tail desc] :as [:values $v1]
+              :select [data path-tail] :from used-keys
+              :join master-keys mk
+              :where (and (not (in desc [:select description :from typed-files]))
+                          (= mk:fingerprint used-keys:fingerprint))
+              :order-by [(asc data)]])
+    (mapc (-lambda ((key path-tail))
+            (cardano-tx-address--new-hd-key key path-tail)))))
+
+(defun cardano-wallet--derive-and-load (fingerprint key-list)
+  "Derive for KEY-LIST and load account of FINGERPRINT."
+  (when (cardano-wallet--derive-files-for-keys key-list)
+    (cardano-tx-address-hw-load
+     (format "[%s]%%" fingerprint)
+     (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))))
 
 (defun cardano-wallet-addresses--refresh ()
   "Refresh the address list."
@@ -112,26 +149,15 @@ If JSON-DATA default to post unless METHOD is defined."
               (or note path)))))
     (setq tabulated-list-entries)))
 
-(defun cardano-wallet--derive-files-for-keys (key-list)
-  "Derive for KEY-LIST."
-  (thread-last
-    key-list
-    (emacsql (cardano-tx-db)
-             [:with used-keys [fingerprint path-tail desc] :as [:values $v1]
-              :select [data path-tail] :from used-keys
-              :join master-keys mk
-              :where (and (not (in desc [:select description :from typed-files]))
-                          (= mk:fingerprint used-keys:fingerprint))
-              :order-by [(asc data)]])
-    (mapc (-lambda ((key path-tail))
-            (cardano-tx-address--new-hd-key key path-tail)))))
-
-(defun cardano-wallet--derive-and-load (fingerprint key-list)
-  "Derive for KEY-LIST and load account of FINGERPRINT."
-  (when (cardano-wallet--derive-files-for-keys key-list)
-    (cardano-tx-address-hw-load
-     (format "[%s]%%" fingerprint)
-     (if (string= "--testnet-magic" (car cardano-tx-cli-network-args)) 0 1))))
+(defun cardano-wallet-address--refresh-query (&optional _arg _noconfirm)
+  "Query for registered addresses and `revert-buffer'."
+  (cardano-wallet
+   (format "wallets/%s/addresses" (cardano-wallet-id cardano-wallet-current))
+   (lambda (json-response)
+     (with-current-buffer (get-buffer "*Cardano Wallet Addresses*")
+       (setq cardano-wallet--buffer-response json-response)
+       (run-hooks 'tabulated-list-revert-hook)
+       (tabulated-list-print 'remember)))))
 
 (defun cardano-wallet-derive-files-for-address ()
   "For address in line, derive and save verification key.  Register address."
@@ -142,35 +168,10 @@ If JSON-DATA default to post unless METHOD is defined."
                 (substring 0 8))))
     (cardano-wallet--derive-and-load
      fingerprint
-     (list (cardano-tx-hw--key-format fingerprint (tabulated-list-get-id))))
+     (list (cardano-tx-hw--key-spec fingerprint (tabulated-list-get-id))))
     (forward-line)
     (cardano-wallet-addresses--refresh)
     (tabulated-list-print t)))
-
-(defun cardano-wallet-addresses--keys-left-to-register (wallet-id)
-  "Register missing the keys for used addresses from WALLET-ID."
-  (cardano-wallet
-   (format "wallets/%s/addresses" wallet-id)
-   (lambda (json)
-     (let ((fingerprint (substring wallet-id 0 8)))
-       (thread-last
-         json
-         (mapcar
-          (-lambda ((&alist 'state 'derivation_path))
-            (when (string= state "used")
-              (cardano-tx-hw--key-format fingerprint (string-join (seq-drop derivation_path 3) "/")))))
-         (delq nil)
-         (cardano-wallet--derive-and-load fingerprint))))))
-
-(defun cardano-wallet-address--refresh-query (&optional _arg _noconfirm)
-  "Query for registered addresses and `revert-buffer'."
-  (cardano-wallet
-   (format "wallets/%s/addresses" (cardano-wallet-id cardano-wallet-current))
-   (lambda (json-response)
-     (with-current-buffer (get-buffer "*Cardano Wallet Addresses*")
-       (setq cardano-wallet--buffer-response json-response)
-       (run-hooks 'tabulated-list-revert-hook)
-       (tabulated-list-print 'remember)))))
 
 (defun cardano-wallet-addresses (wallet)
   "Show addresses for WALLET."
@@ -185,20 +186,22 @@ If JSON-DATA default to post unless METHOD is defined."
     (cardano-wallet-address--refresh-query)
     (display-buffer (current-buffer))))
 
-(defun cardano-wallet-readable-number (amount)
-  "AMOUNT as an underscore separated readable string."
-  (let ((ref (number-to-string amount)))
-    (if (<= (length ref) 4)
-        ref
-      (let ((start (if (= 0 (string-match (rx (+ (= 3 digit)) eol) ref))
-                       3 (match-beginning 0))))
-        (string-join
-         (cons
-          (substring ref 0 start)
-          (--map (substring ref it (+ it +3))
-                 (number-sequence start (1- (match-end 0)) 3)))
-         "_")))))
+(defun cardano-wallet-addresses--keys-left-to-register (wallet-id)
+  "Register missing the keys for used addresses from WALLET-ID."
+  (cardano-wallet
+   (format "wallets/%s/addresses" wallet-id)
+   (lambda (json)
+     (let ((fingerprint (substring wallet-id 0 8)))
+       (thread-last
+         json
+         (mapcar
+          (-lambda ((&alist 'state 'derivation_path))
+            (when (string= state "used")
+              (cardano-tx-hw--key-spec fingerprint (string-join (seq-drop derivation_path 3) "/")))))
+         (delq nil)
+         (cardano-wallet--derive-and-load fingerprint))))))
 
+;;; Wallet Main Control
 (defun cardano-wallet-sort-readable-number (column)
   "Generate a sort function for `tabulated-list' readable number at COLUMN."
   (cl-flet ((value (entry)
@@ -207,13 +210,6 @@ If JSON-DATA default to post unless METHOD is defined."
                      (replace-regexp-in-string "_" "")
                      (string-to-number))))
     (lambda (e1 e2) (> (value e1) (value e2)))))
-
-(defun cardano-wallet-print-col (value)
-  "Format VALUE for column."
-  (pcase value
-    ((pred integerp) (cardano-wallet-readable-number value))
-    ((pred stringp) value)
-    (n (format "%S" n))))
 
 (cl-defstruct (cardano-wallet (:constructor cardano-wallet--create)
                               (:copier nil))
@@ -242,10 +238,10 @@ If JSON-DATA default to post unless METHOD is defined."
 
 (defun cardano-wallet-sort (slot)
   "Return function to sort entries by SLOT."
-  (cl-flet ((vals (entry) (funcall (pcase slot
-                                     ('balance #'cardano-wallet-balance)
-                                     ('rewards #'cardano-wallet-rewards)
-                                     ('total #'cardano-wallet-total))
+  (cl-flet ((vals (entry) (funcall (cl-ecase slot
+                                     (balance #'cardano-wallet-balance)
+                                     (rewards #'cardano-wallet-rewards)
+                                     (total #'cardano-wallet-total))
                                    (car entry))))
     (lambda (e1 e2)
       (< (vals e1) (vals e2)))))
@@ -498,47 +494,47 @@ If JSON-DATA default to post unless METHOD is defined."
          (tabulated-list-print))
        "DELETE"))))
 
-(defun cardano-wallet-tx-finish ()
-  "Process buffer into a transaction, sign it and open PREVIEW."
-  (interactive)
-  (let* ((wallet-id (cardano-wallet-id cardano-wallet-tx--wallet))
-         (input-data (cardano-tx--input-buffer))
-         (outputs (cardano-tx-get-in input-data 'outputs))
-         (hw-fingerprint
-          (caar
-           (emacsql (cardano-tx-db) [:select [fingerprint] :from master-keys
-                                     :where (= fingerprint $s1)]
-                    (substring wallet-id 0 8)))))
-    (cardano-wallet
-     (concat "wallets/"
-             wallet-id
-             (concat "/transactions" (if hw-fingerprint "-construct" "")))
-     (lambda (json)
-       (cardano-wallet-show json)
-       (when hw-fingerprint
-         (run-at-time
-          nil nil
-          (lambda ()
-            (cardano-wallet--process-tx hw-fingerprint json)
-            (run-at-time
-             30 nil #'cardano-wallet-addresses--keys-left-to-register wallet-id)))))
-     "POST"
-     `(:payments ,(cl-map 'vector #'cardano-wallet-payment outputs)
-       :encoding "base16"
-       :passphrase ,(or hw-fingerprint (read-passwd "Password to unlock your wallet: "))))))
-
-(defun cardano-wallet--process-tx (fingerprint json)
-  "From HW key FINGERPRINT and JSON from wallet-tx constructor sign all inputs."
+(defun cardano-wallet-process-tx (wallet json)
+  "From HW WALLET and JSON response of wallet-tx constructor sign all inputs."
+  (interactive
+   (list cardano-wallet-current cardano-wallet--buffer-response))
   (let ((filename (cardano-wallet--write-tx (cardano-tx-get-in json 'transaction))))
     (thread-last
       (cardano-tx-get-in json 'coin_selection 'inputs)
       (mapcar
        (-lambda ((&alist 'derivation_path))
-         (cardano-tx-hw--key-format fingerprint (string-join (seq-drop derivation_path 3) "/"))))
+         (cardano-tx-hw--key-spec
+          (substring (cardano-wallet-id wallet) 0 8)
+          (string-join (seq-drop derivation_path 3) "/"))))
       (cardano-tx-hw--signing-files)
       (list nil)
       (cardano-tx-sign filename)
-      (cardano-tx-submit))))
+      (cardano-tx-submit)
+      (run-at-time 30 nil #'cardano-wallet-addresses--keys-left-to-register (cardano-wallet-id wallet)))))
+
+(defun cardano-wallet-tx-finish ()
+  "Process buffer into a transaction, sign it and open PREVIEW."
+  (interactive)
+  (let* ((wallet cardano-wallet-current)
+         (input-data (cardano-tx--input-buffer))
+         (outputs (cardano-tx-get-in input-data 'outputs))
+         (hw-p (when (string-match (rx "[" (= 8 hex) "]HW") (cardano-wallet-name cardano-wallet-current))
+                 "Hardware Wallet")))
+    (cardano-wallet
+     (format "wallets/%s/transactions%s"
+             (cardano-wallet-id wallet)
+             (if hw-p "-construct" ""))
+     (lambda (json)
+       (let ((window (cardano-wallet-show json)))
+         (when hw-p
+           (with-current-buffer (window-buffer window)
+             (setq-local cardano-wallet--buffer-response json)
+             (setq-local cardano-wallet-current wallet)
+             (local-set-key (kbd "C-c C-s") #'cardano-wallet-process-tx)))))
+     "POST"
+     `(:payments ,(cl-map 'vector #'cardano-wallet-payment outputs)
+       :encoding "base16"
+       :passphrase ,(or hw-p (read-passwd "Password to unlock your wallet: "))))))
 
 (defun cardano-wallet--write-tx (cborHex)
   "Write CBORHEX as transaction file."
@@ -572,11 +568,10 @@ If JSON-DATA default to post unless METHOD is defined."
   (with-current-buffer (generate-new-buffer "*Cardano tx*")
     (insert "# -*- mode: cardano-tx; -*-\n\n")
     (cardano-tx-mode)
-    (setq-local cardano-wallet-tx--wallet wallet)
+    (setq-local cardano-wallet-current wallet)
     (yas-expand-snippet (yas-lookup-snippet 'wallet-spend))
     (use-local-map (copy-keymap cardano-tx-mode-map))
     (local-set-key (kbd "C-c C-c") #'cardano-wallet-tx-finish)
-    (local-set-key (kbd "C-c C-s") nil)
     (message "Press %s to build and send transaction."
              (substitute-command-keys "\\[cardano-wallet-tx-finish]"))
     (switch-to-buffer (current-buffer))))
@@ -584,12 +579,13 @@ If JSON-DATA default to post unless METHOD is defined."
 (defun cardano-wallet-tx-assets-pick ()
   "Load assets available on wallet to `kill-ring'."
   (interactive)
-  (->> (cardano-wallet-assets cardano-wallet-tx--wallet)
+  (->> (cardano-wallet-assets cardano-wallet-current)
        (--map
-        (let ((assetname (decode-hex-string (cardano-tx-get-in it "asset_name"))))
-          (concat (cardano-tx-get-in it "policy_id") ":\n"
-                  (if (cardano-tx-nw-p assetname) assetname "\"\"") ": "
-                  (number-to-string (cardano-tx-get-in it "quantity")))))
+        (let ((policy (cardano-tx-get-in it "policy_id"))
+              (assetname (decode-hex-string (cardano-tx-get-in it "asset_name")))
+              (quantity (cardano-tx-get-in it "quantity")))
+          (list (format "%s:\n%S: %d" policy assetname quantity)
+                policy assetname quantity)))
        (cardano-tx-pick "Assets")
        (cardano-tx-assets-group-tokens)
        (cardano-tx-assets-format-tokens)
