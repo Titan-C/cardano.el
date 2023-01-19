@@ -36,6 +36,7 @@ workflow:
 | Stake delegation                   | https://www.youtube.com/watch?v=0A30HIS-BEw |   9:46 |
 | Key files & address management     | https://www.youtube.com/watch?v=8ZIT9Uq_9A0 |  14:25 |
 | Cardano Wallet Interface & scripts | https://youtu.be/Ma9nbhbz3wY                |  14:59 |
+| Hardware wallet integration        | https://www.youtube.com/watch?v=RbVH1YE1WW4 |  17:18 |
 
 The videos are a show case of this project, yet as this project develops
 further, they naturally become obsolete. The documentation bellow is an up to
