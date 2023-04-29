@@ -4,9 +4,9 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.1.0
+;; Version: 0.1.1
 ;; Homepage: https://github.com/Titan-C/cardano.el
-;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (cbor "0.2.3") (bech32 "0.2.1"))
+;; Package-Requires: ((emacs "27.1") (dash "2.19.0") (cbor "0.2.4") (bech32 "0.2.1"))
 ;;
 ;; This file is not part of GNU Emacs.
 ;;

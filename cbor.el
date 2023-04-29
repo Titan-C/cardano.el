@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.3
+;; Version: 0.2.4
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1"))
 ;;
@@ -114,7 +114,7 @@ Default to big endian unless LITTLE is non-nil."
       ;; bytestring are hex encoded
       (2 (encode-hex-string (cbor--consume! argument)))
       ;; Text strings
-      (3 (cbor--consume! argument))
+      (3 (decode-coding-string (cbor--consume! argument) 'utf-8))
       ;; array of data
       (4 (cbor--get-data-array! argument))
       ;; map of pairs of data items
@@ -160,7 +160,7 @@ Default to big endian unless LITTLE is non-nil."
 
 (defun cbor-uint-needed-size (uint)
   "Return standard required sized to store UINT up to 8 bytes."
-  (pcase (ceiling (log uint 255))
+  (pcase (ceiling (log uint 256))
     (1 1)
     (2 2)
     ((or 3 4) 4)
@@ -196,8 +196,8 @@ Default to big endian unless LITTLE is non-nil."
    ;; Text strings
    ((stringp value)
     (progn
-      (cbor--put-ints! 3 (length value))
-      (princ value)))
+      (cbor--put-ints! 3 (string-bytes value))
+      (princ (encode-coding-string value 'utf-8))))
    ;; array of data
    ((vectorp value)
     (progn
