@@ -81,7 +81,10 @@
                  "c074323031332d30332d32315432303a30343a30305a" ,(cbor-tag-create :number 0 :content "2013-03-21T20:04:00Z")
                  "c11a514b67b0"  ,(cbor-tag-create :number 1 :content 1363896240)
                  "f4" :false
-                 "f5" t)))
+                 "f5" t
+                 ;; length of 256, requires two bytes to encode the length
+                 "79010078787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878787878"
+                 "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")))
     (cl-loop for (input expected) on specs by #'cddr do
              (should (equal (cbor->elisp input) expected))
              (should (equal (encode-hex-string (cbor<-elisp expected)) input)))))

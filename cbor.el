@@ -160,7 +160,7 @@ Default to big endian unless LITTLE is non-nil."
 
 (defun cbor-uint-needed-size (uint)
   "Return standard required sized to store UINT up to 8 bytes."
-  (pcase (ceiling (log uint 256))
+  (pcase (ceiling (log (+ 1 uint) 256))
     (1 1)
     (2 2)
     ((or 3 4) 4)
