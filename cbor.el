@@ -4,7 +4,7 @@
 ;;
 ;; Author: Oscar Najera <https://oscarnajera.com>
 ;; Maintainer: Oscar Najera <hi@oscarnajera.com>
-;; Version: 0.2.4
+;; Version: 0.2.5
 ;; Homepage: https://github.com/Titan-C/cardano.el
 ;; Package-Requires: ((emacs "25.1"))
 ;;
@@ -160,7 +160,7 @@ Default to big endian unless LITTLE is non-nil."
 
 (defun cbor-uint-needed-size (uint)
   "Return standard required sized to store UINT up to 8 bytes."
-  (pcase (ceiling (log uint 256))
+  (pcase (ceiling (log (1+ uint) 256))
     (1 1)
     (2 2)
     ((or 3 4) 4)
