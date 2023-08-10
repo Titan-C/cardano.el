@@ -131,14 +131,14 @@ Default to big endian unless LITTLE is non-nil."
 
 (defun cbor-hex-p (str)
   "Test if STR is a hex only."
-  (string-match-p (rx line-start (+ hex) line-end) str))
+  (and (zerop (mod (length str) 2))
+       (string-match-p (rx line-start (+ hex) line-end) str)))
 
 (defun cbor->elisp (byte-or-hex-string)
   "Convert BYTE-OR-HEX-STRING into an Emacs Lisp object."
   (with-temp-buffer
     (set-buffer-multibyte nil)
-    (insert (if (and (zerop (mod (length byte-or-hex-string) 2))
-                     (cbor-hex-p byte-or-hex-string))
+    (insert (if (cbor-hex-p byte-or-hex-string)
                 (decode-hex-string byte-or-hex-string)
               byte-or-hex-string))
     (goto-char (point-min))
@@ -187,7 +187,7 @@ Default to big endian unless LITTLE is non-nil."
    ((and (integerp value) (> 0 value))
     (cbor--put-ints! 1 (- -1 value)))
    ;; bytestring are hex encoded
-   ((and (stringp value) (zerop (mod (length value) 2)) (cbor-hex-p value))
+   ((and (stringp value) (cbor-hex-p value))
     (let ((rev-list
            (decode-hex-string value)))
       (cbor--put-ints! 2 (length rev-list))
