@@ -86,7 +86,7 @@
     (cardano-tx-log 'info "Backing up %s %s" db-name snapshot-name)
     (copy-file db-name snapshot-name)
     ;; reconnect
-    (setq cardano-tx-db-connection (emacsql-sqlite db-name))))
+    (setq cardano-tx-db-connection (emacsql-sqlite-open db-name))))
 
 (defun cardano-tx-db--update (db version)
   "Update the database DB from VERSION to latest."
@@ -117,7 +117,7 @@
   (unless (and cardano-tx-db-connection (emacsql-live-p cardano-tx-db-connection)
                (not (cardano-tx-db-upgrade-from cardano-tx-db-connection)))
     (let* ((db-path (expand-file-name "cardano.db" cardano-tx-db-keyring-dir))
-           (connection (emacsql-sqlite db-path)))
+           (connection (emacsql-sqlite-open db-path)))
       (condition-case nil
           (emacsql connection [:select * :from typed-files])
         (emacsql-error (cardano-tx-db--init connection)))
