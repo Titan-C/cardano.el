@@ -590,7 +590,7 @@ If JSON-DATA default to post unless METHOD is defined."
        (cardano-tx-assets-group-tokens)
        (cardano-tx-assets-format-tokens)
        (replace-regexp-in-string "^" "      ")
-       (kill-new)))
+       (cardano-tx-kill-new)))
 
 (provide 'cardano-wallet)
 ;;; cardano-wallet.el ends here

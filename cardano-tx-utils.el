@@ -117,6 +117,11 @@ CALLBACK processes the response."
           (error err-message))
       (funcall callback response))))
 
+(defun cardano-tx-kill-new (str)
+  "On emacs29 kill-new returns nil instead of being identity. Thus make the two"
+  (kill-new str)
+  str)
+
 (defun cardano-tx-blake2-sum (string-or-buffer &optional size)
   "Calculate blake2 checksum for STRING-OR-BUFFER.
 Output SIZE in bits, default 224. Return as hex-string."

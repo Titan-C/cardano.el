@@ -67,7 +67,7 @@ This is only available on TX preview buffers.")
                 (cardano-tx-get-in (json-read-file rewards-file) 0)))
       (when (called-interactively-p 'interactive)
         (cardano-tx-cli-pretty-yaml-message result))
-      (kill-new
+      (cardano-tx-kill-new
        (number-to-string
         (cardano-tx-get-in result 'rewardAccountBalance))))))
 
@@ -135,7 +135,7 @@ If RESET query the node again."
        (cl-map 'vector (lambda (text) (-> (split-string text "\n") (car) (substring-no-properties))) it)
        (cardano-tx-db-utxo-spend it)
        (mapconcat (lambda (row) (apply #'cardano-tx-utxo-entry row)) it "\n  - utxo: ")
-       (kill-new it)))
+       (cardano-tx-kill-new it)))
 
 (defun cardano-tx-witness-query (witness-list)
   "SQLite query union to include rows about explicitly declared in WITNESS-LIST."
@@ -303,7 +303,7 @@ Assemble all witnesses into transaction & submit it."
 (defun cardano-tx-policyid (mint-script-file)
   "Calculate the policy id for MINT-SCRIPT-FILE."
   (interactive (list (read-file-name "Which policy script: ")))
-  (kill-new (cardano-tx-cli "transaction" "policyid" "--script-file" mint-script-file)))
+  (cardano-tx-kill-new (cardano-tx-cli "transaction" "policyid" "--script-file" mint-script-file)))
 
 (defun cardano-tx--mint-rows (mints)
   "From the MINTS alist return rows of:
@@ -489,14 +489,14 @@ It produces the actual policy-id from the MINT-ROWS."
       cardano-tx-assets-format-tokens
       (message)
       (replace-regexp-in-string "^" "      ")
-      kill-new)))
+      (cardano-tx-kill-new))))
 
 (defun cardano-tx-submit (tx-file)
   "Submit transaction on TX-FILE."
   (when (and (stringp tx-file) (file-exists-p tx-file))
     (message "%s\nTxId: %s. Copied to kill-ring"
              (cardano-tx-cli "transaction" "submit" "--tx-file" tx-file)
-             (kill-new (cardano-tx-view-or-hash tx-file t)))))
+             (cardano-tx-kill-new (cardano-tx-view-or-hash tx-file t)))))
 
 (define-derived-mode cardano-tx-mode yaml-mode "cardano-tx"
   "Edit a transaction through a yaml representation."

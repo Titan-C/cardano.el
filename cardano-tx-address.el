@@ -178,14 +178,14 @@ Optionally define the STAKE-VKEY file."
   (let ((all-addr (cardano-tx-address-named)))
     (-> (completing-read "Select an address: " all-addr)
         (assoc all-addr)
-        cdr kill-new)))
+        cdr cardano-tx-kill-new)))
 
 (defun cardano-tx-address-key-hash (vkey-file)
   "Get the key hash out of the VKEY-FILE."
   (interactive
    (list (read-file-name "Select verification key file: " cardano-tx-db-keyring-dir
                          nil t nil (lambda (n) (string-suffix-p ".vkey" n)))))
-  (kill-new
+  (cardano-tx-kill-new
    (if (member (expand-file-name vkey-file) (mapcar #'caddr (cardano-tx-db-stake-keys)))
        (cardano-tx-cli "stake-address" "key-hash" "--stake-verification-key-file" vkey-file)
      (cardano-tx-cli "address" "key-hash" "--payment-verification-key-file" vkey-file))))

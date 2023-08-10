@@ -222,12 +222,12 @@ MONITOR the address if not nil."
   "Copy address on entry to `kill-ring'."
   (interactive)
   (message "Address %s copied to `kill-ring'."
-           (-> (tabulated-list-get-entry) (aref 1) (kill-new))))
+           (-> (tabulated-list-get-entry) (aref 1) (cardano-tx-kill-new))))
 
 (defun cardano-tx-db-address-delete (address)
   "Delete data for ADDRESS."
   (interactive
-   (list (-> (tabulated-list-get-entry) (aref 1) (kill-new))))
+   (list (-> (tabulated-list-get-entry) (aref 1) (cardano-tx-kill-new))))
   (emacsql (cardano-tx-db)
            [:delete :from addresses
             :where (= raw $s1)]
@@ -444,7 +444,7 @@ Which defaults to know location or description on keyring."
   (when-let ((result (car (cardano-tx-db-typed-files-where 'id file-id))))
     (seq-let (_id _type path) result
       (when path
-        (message "Filename '%s' copied to `kill-ring'." (kill-new path))))))
+        (message "Filename '%s' copied to `kill-ring'." (cardano-tx-kill-new path))))))
 
 (defun cardano-tx-db-file-annotate (file-id)
   "Annotate data for FILE-ID."
